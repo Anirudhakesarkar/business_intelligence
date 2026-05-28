@@ -28,31 +28,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const [config, setConfigState] = useState<Config | null>(null);
-  const [mounted, setMounted] = useState(false);
 
   const refreshAuth = useCallback(() => {
     setConfigState(getConfig());
   }, []);
 
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const cfg = getConfig();
-      setConfigState(cfg);
-      setMounted(true);
-
-      if (cfg?.token && cfg?.user) return;
-      if (cfg?.apiKey && !cfg.token) return;
-      // Login has been removed from this project, so we don't attempt a session refresh.
-    })();
-    return () => {
-      cancelled = true;
-    };
+    const cfg = getConfig();
+    setConfigState(cfg);
   }, []);
 
   useEffect(() => {
-    if (mounted) setConfigState(getConfig());
-  }, [pathname, mounted]);
+    setConfigState(getConfig());
+  }, [pathname]);
 
   const user = config?.user ?? null;
   const token = config?.token ?? null;
@@ -101,14 +89,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     () => ({ user, role, token, config, isAuthenticated, hasRole, canAccessSite, setSiteId, refreshAuth, logout }),
     [user, role, token, config, isAuthenticated, hasRole, canAccessSite, setSiteId, refreshAuth, logout]
   );
-
-  if (!mounted) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-950">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-slate-600 border-t-blue-500" />
-      </div>
-    );
-  }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

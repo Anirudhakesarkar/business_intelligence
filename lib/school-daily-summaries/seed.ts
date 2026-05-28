@@ -7,10 +7,10 @@ function todayIso() {
   return new Date().toISOString().slice(0, 10);
 }
 
-export function seedSchoolDailySummariesPipeline(organizationId = 1, date?: string) {
+export async function seedSchoolDailySummariesPipeline(organizationId = 1, date?: string) {
   const d = date ?? todayIso();
   resetDailySummariesStore();
-  const foundation = seedDemoSchool(organizationId);
+  const foundation = await seedDemoSchool(organizationId);
   const ai = seedDemoAiSignals(organizationId);
   const rules = seedDefaultRules(organizationId);
   const evaluation = evaluateRules(organizationId);

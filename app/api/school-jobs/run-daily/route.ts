@@ -9,6 +9,6 @@ export async function POST(req: NextRequest) {
   const date = req.nextUrl.searchParams.get('date') ?? undefined;
   const seedIfEmpty = req.nextUrl.searchParams.get('seedIfEmpty') !== 'false';
   const includeGpt = req.nextUrl.searchParams.get('includeGpt') !== 'false';
-  const result = runDailySchoolIntelligenceJob({ organizationId, date, seedIfEmpty, includeGpt });
+  const result = await runDailySchoolIntelligenceJob({ organizationId, date, seedIfEmpty, includeGpt });
   return json(result);
 }

@@ -134,6 +134,18 @@ The School Management module is the “source of truth” for **where / who / wh
 - **Status**:
   - **Ready**: UI + API layer + DB repos exist
   - **Not ready**: meaningful data persistence when `SCHOOL_INTELLIGENCE_DB=0` (mock mode)
+- **UI text inventory (exact labels)**
+  - **Page title**: **Master Data**
+  - **Subtitle text**: “Campus hierarchy, rooms, classes, subjects, teachers, and staff — foundation for all intelligence modules.”
+  - **Header actions**: **Bulk import**, **Seed demo data** (loading: **Seeding…**)
+  - **Tab labels**: Sites, Buildings, Floors, Zones, Rooms, Classes & Sections, Subjects, Teachers, Staff, Campus Tree
+  - **Common controls**:
+    - Search placeholder: “Search…”
+    - Button: **Export CSV**
+    - Bulk bar: “N selected”, **Clear**, **Delete selected (N)** (loading: **Deleting…**)
+    - Empty states: “No records yet.” and “Use the "Seed demo" button above or add entries manually.”
+  - **Common “Add” buttons**: **+ Add Site**, **+ Add Building**, **+ Add Floor**, **+ Add Zone**, **+ Add Room**, **+ Add Class**, **+ Add Section**, **+ Add Subject**, **+ Add Teacher**, **+ Add Staff**
+  - **Common sheet actions**: **Cancel**, **Save** / **Saving…**, plus create labels like **Create site** / **Save changes**
 - **Buttons and flows**
   - **CRUD (Sites/Buildings/Floors/Zones/Rooms/Classes/Sections/Subjects/Teachers/Staff)**
     - **Endpoints** (working when DB enabled):
@@ -205,6 +217,17 @@ The School Management module is the “source of truth” for **where / who / wh
 - **Status**
   - **Ready**: validate + import + sample seeding exist
   - **Not ready in mock-only mode**: persistent timetable storage (DB disabled)
+- **UI text inventory (exact labels)**
+  - **Page title**: **Timetable**
+  - **Subtitle text**: “Class schedules mapped to rooms and teachers. Overlap detection included.”
+  - **Header buttons**: **Load sample schedule** (loading: **Loading…**), **Import CSV**, **+ Add Entry**
+  - **Confirm**: “This replaces all timetable entries with a small sample (Grade 1 A/B, Grade 2 A). Continue?”
+  - **No-data banner**: “No timetable yet” with steps referencing **Seed demo data**, **Load sample schedule**, **Import CSV**, and link “sample file”
+  - **Filters**: “Class (grade)” (default “All classes”), “Section” (default “All sections” / “All sections in class”), **Clear filters**
+  - **View tabs**: Weekly Grid, By Section, By Teacher, By Room
+  - **Empty states**: “Loading timetable…”, “No timetable entries. Load demo seed or add entries.”, “No entries for selected teacher.”, “No entries for selected room.”, “No entries for selected section.”
+  - **Add Entry sheet title**: “Add Timetable Entry” (primary button: **Add entry**, loading: **Saving…**)
+  - **Import sheet title**: “Import Timetable (CSV)” (primary commit button: **Commit N entries**, loading: **Importing…**)
 
 ### Cameras & Mapping (Ready when DB enabled)
 
@@ -245,6 +268,26 @@ The School Management module is the “source of truth” for **where / who / wh
   - `school_mgmt_cameras`, `school_camera_processing_configs`
   - `school_camera_health_events`, `school_diagnostic_media`
   - `school_ai_signals` (+ derived helpers depending on endpoint)
+- **UI text inventory (exact labels)**
+  - **List page title**: **Cameras and Mapping**
+  - **Subtitle text**: “Register cameras, assign purpose, process owner, and location. Classroom/lab cameras require a room.”
+  - **Header buttons**: **Import CSV**, **+ Add Camera**
+  - **Mapping status banner**: “N% mapped”, “N total cameras”, “N camera(s) missing location or purpose”, “N classroom/lab camera(s) missing room assignment”
+  - **Filters**:
+    - Search placeholder: “Search cameras…”
+    - Purpose: “All purposes”
+    - Status: “All statuses”
+    - Button: **Clear**
+  - **View toggle**: table, map
+  - **Export**: “N of N cameras” + button **Export CSV**
+  - **Empty state**: “No cameras match filters. Load demo seed or add cameras.”
+  - **Table headers**: Code, Name, Purpose, Process Owner, Criticality, Status, Zone, Room, Active hrs, Actions
+  - **Row actions**: **AI detail**, **Edit**
+  - **Import sheet title**: “Import Cameras (CSV)” (success: “Import complete.”; primary: “Import N cameras” / “Importing…”)
+  - **Camera sheet title**: **Add Camera** / **Edit Camera** (primary: **Add camera** / **Save changes**; loading: **Saving…**)
+  - **Detail page title pattern**: “CAMCODE — Name” (subtitle: “Health timeline, recent signals, and processing configuration.”)
+  - **Detail page links**: “← AI Health grid”, “Open signal timeline →”, “Camera mapping”
+  - **Detail empty states**: “No health events recorded.”, “No processing config.”, “No batches yet.”
 
 ### School Calendar (Ready when DB enabled)
 
@@ -263,6 +306,26 @@ The School Management module is the “source of truth” for **where / who / wh
   - `GET/POST /api/school-calendar`
   - `POST /api/school-calendar/bulk`
 - **DB table**: `school_calendars`
+- **UI text inventory (exact labels)**
+  - **Page title**: **School Calendar**
+  - **Subtitle text**: “Working days, holidays, exams, and special schedules. Upload a .ics or .csv file to import in bulk.”
+  - **Header buttons**: **Upload Calendar**, **Bulk Mark**
+  - **View tabs**: Month View, Heat Summary, List View
+  - **Month nav buttons**: “‹” and “›”
+  - **Loading**: “Loading calendar…”
+  - **List table headers**: Date, Day type, Label, Actions (row action: **Edit**)
+  - **List empty state**: “No calendar entries yet. Use Upload Calendar or click any day to add.”
+  - **Upload sheet title**: “Upload Calendar”
+  - **Upload sheet errors**:
+    - “Unsupported file type. Please upload an .ics or .csv file.”
+    - “No valid events found. Make sure dates are in YYYY-MM-DD or DD/MM/YYYY format.”
+    - “Failed to parse file. Please check the format and try again.”
+  - **Upload sheet preview**:
+    - “N events detected — classified automatically”
+    - Buttons: “Show fewer”, “Show all N events”
+    - Placeholder: “Event name”
+    - Footer: **Cancel**, “Import N events” / **Importing…**
+  - **Upload sheet success**: “Import complete!” and “N calendar entries saved.”
 
 ### Staff Duty (Ready when DB enabled)
 
@@ -282,6 +345,17 @@ The School Management module is the “source of truth” for **where / who / wh
   - Time windows: `GET/POST /api/school-time-windows`
 - **DB tables**
   - `school_staff_duty_rosters`, `school_time_windows`
+- **UI text inventory (exact labels)**
+  - **Page title**: **Staff Duty Roster**
+  - **Subtitle text**: “Gate, floor, corridor, playground, bus bay, lab, and emergency exit coverage. ⚡ marks critical windows.”
+  - **Header buttons**: **Export CSV**, **Import CSV**, **+ Add Duty**
+  - **Gap banner title**: “⚠ Critical window coverage gaps”
+  - **Filters**: “All days”, “All duty types”, button **Clear**
+  - **View toggle**: grid, list
+  - **Loading**: “Loading roster…”
+  - **Empty state**: “No roster entries. Load demo seed or add entries.”
+  - **Import sheet title**: “Import Duty Roster (CSV)” (hint includes “Required columns: …”)
+  - **Add sheet title**: “Add Duty Assignment” (primary: **Add assignment**, loading: **Saving…**)
 
 ### AI Health / Signals / Workers (Ready when DB enabled)
 
@@ -314,6 +388,25 @@ The School Management module is the “source of truth” for **where / who / wh
 - **DB tables**
   - `school_ai_signals`, `school_ai_signal_batches`
   - `school_ai_workers`, `school_ai_worker_heartbeats`
+- **UI text inventory (exact labels)**
+  - **AI Health**
+    - **Page title**: **Cameras & AI Health**
+    - **Subtitle text**: “Stream health, signal freshness, and worker summary — operational evidence only (no management scores).”
+    - Buttons: **Seed demo signals**, **Refresh**, **Worker health**, **Signal timeline**
+    - Empty banner: “No cameras registered. Complete Phase 1 camera mapping first, then seed AI signals.”
+    - Filters: Purpose (default “All”), Criticality (default “All”), checkbox “Stale only”
+    - States: “Loading health grid…”, “No cameras match filters.”
+  - **Signals**
+    - **Page title**: **Signal Timeline**
+    - **Subtitle text**: “Ingested AI signals across cameras — filter by type, camera, date, and confidence.”
+    - Buttons: **Clear**, **Refresh**, “Export CSV (max 10k)”, **Seed signals** (loading: **Seeding…**)
+    - Empty state: “No signals match filters. Try seeding demo data or adjusting filters.”
+  - **Workers**
+    - **Page title**: **AI Workers**
+    - **Subtitle text**: “Edge worker registry — heartbeat metrics and processing configuration.”
+    - Buttons: “Seed workers + signals” (loading: **Seeding…**), **Refresh**
+    - Empty state: “No workers registered. Seed AI signals to register demo workers.”
+    - Toggle text: “▼ Show processing config” / “▲ Hide processing config”; “Heartbeat:” + “Never”
 
 ### Settings / Audit logs (Ready when DB enabled)
 
@@ -328,6 +421,15 @@ The School Management module is the “source of truth” for **where / who / wh
   - `GET /api/school-management/audit-log`
 - **DB table**
   - `school_audit_logs` (+ settings tables used by repos)
+- **UI text inventory (exact labels)**
+  - **Page title**: **Settings**
+  - **Subtitle text**: “Organization defaults, compliance checklist, teaching zones, and audit trail.”
+  - **Cards**: Phase 2 readiness, Organization defaults, Compliance checklist, Teaching zones — {camera name}, Audit log
+  - **Phase 2 text**: “Ready for Phase 2.” / “Complete missing items on overview.”
+  - **Checkbox label**: “Strict Phase 2 gate”
+  - **Field labels**: Timezone, Academic year, Timetable overlaps (options: Block, Warn only)
+  - **Teaching zones fields**: “Board polygon (JSON)”, “Desk polygon (JSON)”
+  - **Buttons**: **Save settings**, **Refresh**
 
 ---
 
@@ -599,6 +701,439 @@ Copilot components are primarily used on the School Intelligence overview (and D
   - Button: **Create action** (becomes **Creating…** then **Action created**)
 
 ---
+
+## School Management — per-page UI text inventory (labels, cards, buttons, filters)
+
+This section lists **the exact UI text** (labels users see) per page in School Management, so Codex can reason about UX coverage and gaps.
+
+### `/dashboard/school-management` (Overview)
+
+- **Page title**: **School Management**
+- **Subtitle text**: “Foundation setup: campus hierarchy, cameras, timetable, calendar, and duty roster.”
+- **Header buttons**
+  - Button: **Refresh**
+  - Button: **Load demo seed**
+- **Progress bar**: `SetupProgressBar` (percent only; no visible label on bar itself)
+- **KPI cards (titles)**
+  - Cameras mapped
+  - Rooms configured
+  - Timetable entries
+  - Roster entries
+  - Calendar days
+- **Calendar status card**
+  - Card title: **Calendar status**
+  - Inline counts: “N working”, “N holidays”, “N exams”, “N events”, “N half days”, “(N days configured)”
+- **Next action card**
+  - Card title: **Next recommended setup action**
+  - Link label is dynamic (example default): **Register cameras →**
+- **Missing setup card**
+  - Card title: **Missing setup items**
+  - Extra line (when present): “Unmapped cameras: …”
+- **Ready message**
+  - “School is ready for Phase 2 intelligence modules.”
+- **Quick links (cards)**
+  - Master Data →
+  - Cameras and Mapping →
+  - Timetable →
+  - Staff Duty Roster →
+  - School Calendar →
+- **Loading state**
+  - “Loading setup health…”
+
+### `/dashboard/school-management/master-data` (Master Data)
+
+- **Page title**: **Master Data**
+- **Subtitle text**: “Campus hierarchy, rooms, classes, subjects, teachers, and staff — foundation for all intelligence modules.”
+- **Header actions**
+  - Button: **Bulk import** (via `BulkImportButton` UI)
+  - Button: **Seed demo data** (loading: **Seeding…**)
+- **Tab bar labels**
+  - Sites
+  - Buildings
+  - Floors
+  - Zones
+  - Rooms
+  - Classes & Sections
+  - Subjects
+  - Teachers
+  - Staff
+  - Campus Tree
+- **Shared table/selection controls**
+  - Search placeholder: “Search…”
+  - Button: **Export CSV**
+  - Bulk selection bar: “N selected”, **Clear**, **Delete selected (N)** (loading: **Deleting…**)
+  - Select-all tooltip/title: “Select all (N)”
+  - Empty state: “No records yet.”
+  - Empty state hint: “Use the "Seed demo" button above or add entries manually.”
+- **Panels and “Add” buttons (exact labels)**
+  - Sites: **+ Add Site**
+  - Buildings: **+ Add Building**
+  - Floors: **+ Add Floor**
+  - Zones: **+ Add Zone**
+  - Rooms: **+ Add Room**
+  - Classes: **+ Add Class**
+  - Sections: **+ Add Section**
+  - Subjects: **+ Add Subject**
+  - Teachers: **+ Add Teacher**
+  - Staff Members: **+ Add Staff**
+- **Create/Edit sheet common buttons**
+  - Button: **Cancel**
+  - Button: **Save** / **Saving…**
+  - Create labels (footer primary button text):
+    - **Create site** / **Save changes**
+    - **Create building** / **Save changes**
+    - **Create floor** / **Save changes**
+    - **Create zone** / **Save changes**
+    - **Create room** / **Save changes**
+    - **Create class** / **Save changes**
+    - **Create section** / **Save changes**
+    - **Create subject** / **Save changes**
+    - **Create teacher** / **Save changes**
+    - **Create staff** / **Save changes**
+- **Example field labels/placeholders (visible)**
+  - Site: “Site name *” (placeholder “Main Campus”), “Address” (placeholder “123 School Rd…”)
+  - Building: “Building name *” (placeholder “Block A”)
+  - Floor: “Floor name *” (placeholder “Ground Floor”)
+  - Zone: “Zone name *” (placeholder “North Wing”), “Capacity (optional)” (placeholder “—”)
+  - Room: “Room code *” (placeholder “R-101”), “Room name *” (placeholder “Room 101”)
+  - Subject: “Subject name *” (placeholder “Mathematics”), “Subject code” (placeholder “MATH-01”)
+  - Teacher: “Employee code” (placeholder “EMP-001”), “Full name *” (placeholder “Ms. Patel”), “Email” (placeholder “teacher@school.edu”), “Phone” (placeholder “+91 98765 43210”)
+  - Staff: “Employee code” (placeholder “STF-001”), “Full name *” (placeholder “Ramesh Kumar”), “Phone” (placeholder “+91 98765 43210”)
+
+### `/dashboard/school-management/cameras` (Cameras and Mapping)
+
+- **Page title**: **Cameras and Mapping**
+- **Subtitle text**: “Register cameras, assign purpose, process owner, and location. Classroom/lab cameras require a room.”
+- **Header buttons**
+  - Button: **Import CSV**
+  - Button: **+ Add Camera**
+- **Mapping status banner text**
+  - “N% mapped”
+  - “N total cameras”
+  - “N camera(s) missing location or purpose”
+  - “N classroom/lab camera(s) missing room assignment”
+- **Filters**
+  - Search placeholder: “Search cameras…”
+  - Purpose dropdown: “All purposes” + purpose values (e.g., Classroom, Gate, Corridor, …, Compliance)
+  - Status dropdown: “All statuses” + statuses (Active, Inactive, Offline, Maintenance)
+  - Button: **Clear**
+- **View toggle**
+  - table
+  - map
+- **Counts + export**
+  - “N of N cameras”
+  - Button: **Export CSV**
+- **Empty state**
+  - “No cameras match filters. Load demo seed or add cameras.”
+- **Table headers**
+  - Code
+  - Name
+  - Purpose
+  - Process Owner
+  - Criticality
+  - Status
+  - Zone
+  - Room
+  - Active hrs
+  - Actions
+- **Row actions**
+  - Link: **AI detail**
+  - Link/button: **Edit**
+- **Import sheet**
+  - Sheet title: “Import Cameras (CSV)”
+  - Dropzone text: “Click to select a CSV file” / “or drag and drop”
+  - Validation error: “File must have a header row and at least one data row”
+  - Preview text: “N row(s) parsed”, “← Re-upload”
+  - Success text: “Import complete.”
+  - Buttons: **Close**, **Importing…** / “Import N cameras”
+- **Add/Edit camera sheet**
+  - Sheet title: **Add Camera** / **Edit Camera**
+  - Label: “Camera code *” (placeholder “CAM-001”)
+  - Save button: **Add camera** / **Save changes** (loading: **Saving…**)
+  - Validation messages (exact text):
+    - “Camera code is required”
+    - “Purpose is required”
+    - “Process owner is required”
+    - “Camera must be mapped to a zone or room”
+    - “Classroom and lab cameras must have a room assigned”
+    - “Active end time must be after start time”
+
+### `/dashboard/school-management/cameras/[id]` (Camera AI Detail)
+
+- **Breadcrumb / page title**
+  - Title: “CAMCODE — Name” (or “Camera detail”)
+  - Subtitle: “Health timeline, recent signals, and processing configuration.”
+- **Top links**
+  - “← AI Health grid”
+  - “Open signal timeline →”
+  - “Camera mapping”
+- **Loading/empty**
+  - “Loading…”
+  - “Camera not found.”
+- **Card headings**
+  - “Health timeline (recent)”
+  - “Processing config (read-only)”
+  - “Recent signal batches”
+  - “Recent signals”
+- **Empty states**
+  - “No health events recorded.”
+  - “No processing config.”
+  - “No batches yet.”
+  - Recent signals link: “Full day replay →”
+- **Field labels shown**
+  - Purpose:
+  - Criticality:
+  - Process owner:
+  - Freshness: Fresh / Stale
+  - “Last signal: …”
+  - Processing config keys: Sample rate, Min confidence, Snapshots (Enabled/Disabled), Active (Yes/No), Enabled signals
+
+### `/dashboard/school-management/timetable` (Timetable)
+
+- **Page title**: **Timetable**
+- **Subtitle text**: “Class schedules mapped to rooms and teachers. Overlap detection included.”
+- **Header buttons**
+  - Button: **Load sample schedule** (loading: **Loading…**)
+  - Button: **Import CSV**
+  - Button: **+ Add Entry**
+  - Confirmation text: “This replaces all timetable entries with a small sample (Grade 1 A/B, Grade 2 A). Continue?”
+- **No-data helper banner**
+  - Title line: “No timetable yet”
+  - Checklist text includes:
+    - “Seed demo data”
+    - “Load sample schedule”
+    - “Import CSV”
+    - Link text: “sample file”
+- **Stats bar labels**
+  - “N total entries”
+  - “N section(s) scheduled”
+  - “N teacher(s) assigned”
+  - “N room(s) in use”
+- **Filters**
+  - Label: “Class (grade)” (dropdown default: “All classes”)
+  - Label: “Section” (dropdown default: “All sections” / “All sections in class”)
+  - Button: **Clear filters**
+  - Helper line: “Pick a class and section to see that group’s weekly calendar…”
+- **View tabs**
+  - Weekly Grid
+  - By Section
+  - By Teacher
+  - By Room
+- **Empty states**
+  - “Loading timetable…”
+  - “No timetable entries. Load demo seed or add entries.”
+  - “No entries for selected teacher.”
+  - “No entries for selected room.”
+  - “No entries for selected section.”
+- **Table headers (Teacher view)**
+  - Day, Time, Section, Subject, Room, Type
+- **Table headers (Room view)**
+  - Day, Time, Section, Subject, Teacher, Conflict
+  - Conflict badge: “Double-booked”
+- **Add entry sheet**
+  - Sheet title: “Add Timetable Entry”
+  - Field labels: Class, Section *, Day of week *, Period type, Start time *, End time *, Subject, Teacher, Room *
+  - Primary button: **Add entry** (loading: **Saving…**)
+  - Validation messages:
+    - “Section is required”
+    - “Room is required”
+    - “Times are required”
+    - “End time must be after start time”
+- **Import timetable sheet**
+  - Sheet title: “Import Timetable (CSV)”
+  - Primary button (commit step): **Commit N entries** (loading: **Importing…**)
+
+### `/dashboard/school-management/calendar` (School Calendar)
+
+- **Page title**: **School Calendar**
+- **Subtitle text**: “Working days, holidays, exams, and special schedules. Upload a .ics or .csv file to import in bulk.”
+- **Header buttons**
+  - Button: **Upload Calendar**
+  - Button: **Bulk Mark**
+- **View tabs**
+  - Month View
+  - Heat Summary
+  - List View
+- **Month navigation**
+  - Buttons: “‹” and “›”
+  - Center label: “{MonthName} {Year}”
+- **Loading state**
+  - “Loading calendar…”
+- **List table headers**
+  - Date
+  - Day type
+  - Label
+  - Actions
+- **List row action**
+  - Link/button: **Edit**
+- **List empty state**
+  - “No calendar entries yet. Use Upload Calendar or click any day to add.”
+- **Upload sheet**
+  - Sheet title: “Upload Calendar”
+  - Success text: “Import complete!” + “N calendar entries saved.”
+  - Dropzone text: “Drop your calendar file here” / “or click to browse”
+  - File hint: “Click to replace”
+  - Format hint title: “How it works”
+  - Errors:
+    - “Unsupported file type. Please upload an .ics or .csv file.”
+    - “No valid events found. Make sure dates are in YYYY-MM-DD or DD/MM/YYYY format.”
+    - “Failed to parse file. Please check the format and try again.”
+  - Preview controls:
+    - “N events detected — classified automatically”
+    - Button: “Show fewer”
+    - Button: “Show all N events”
+    - Placeholder: “Event name”
+  - Footer buttons: **Cancel**, **Importing…** / “Import N events”
+
+### `/dashboard/school-management/staff-duty` (Staff Duty Roster)
+
+- **Page title**: **Staff Duty Roster**
+- **Subtitle text**: “Gate, floor, corridor, playground, bus bay, lab, and emergency exit coverage. ⚡ marks critical windows.”
+- **Header buttons**
+  - Button: **Export CSV**
+  - Button: **Import CSV**
+  - Button: **+ Add Duty**
+- **Stats line text** (when data exists)
+  - “N total assignments”
+  - “⚡ N critical windows”
+  - “⚠ N gap(s) in critical coverage”
+  - “✓ All critical windows staffed”
+- **Gap banner**
+  - Title: “⚠ Critical window coverage gaps”
+  - Line format: “• {DutyType}: critical window has no staff assigned”
+  - Hint: “No critical windows defined yet — mark Gate and Playground duties as critical.”
+- **Filters**
+  - Day dropdown: “All days”
+  - Duty dropdown: “All duty types”
+  - Button: **Clear**
+- **View toggle**
+  - grid
+  - list
+- **Loading state**
+  - “Loading roster…”
+- **Empty states**
+  - “No roster entries for this day. Load demo seed or add entries.”
+  - “No roster entries. Load demo seed or add entries.”
+- **Grid view header**
+  - “Time slot” + duty types as columns (Gate, Floor, Corridor, Playground, BusBay, Lab, Reception, EmergencyExit)
+- **List view headers**
+  - Staff, Duty, Day, Time, Zone, Critical
+- **Import roster sheet**
+  - Sheet title: “Import Duty Roster (CSV)”
+  - Hint: “Required columns: staffMemberId, zoneId, dutyType, dayOfWeek, startTime, endTime, isCriticalWindow”
+  - “Click to select CSV”
+  - Preview: “N row(s) ready to import”, “← Re-upload”
+  - Footer buttons: **Close**, **Importing…** / “Import N entries”
+  - Success line: “✓ N entries imported.”
+- **Add assignment sheet**
+  - Sheet title: “Add Duty Assignment”
+  - Labels: Staff member *, Zone (optional), Duty type, Day, Start time *, End time *
+  - Toggle label: “Critical window (⚡ shown as gap if unstaffed)”
+  - Buttons: **Cancel**, **Add assignment** (loading: **Saving…**)
+  - Validation messages:
+    - “Staff member is required”
+    - “Times are required”
+    - “End time must be after start”
+
+### `/dashboard/school-management/signals` (Signal Timeline)
+
+- **Page title**: **Signal Timeline**
+- **Subtitle text**: “Ingested AI signals across cameras — filter by type, camera, date, and confidence.”
+- **Summary cards**
+  - Total signals
+  - Filtered
+  - Signal types
+  - Avg confidence
+- **Top chips**
+  - Signal type chips are dynamic text (top 6 by volume), show type + a count badge.
+- **Filters**
+  - Camera (dropdown): “All cameras”
+  - Signal type (dropdown): “All types”
+  - From date (date input)
+  - To date (date input)
+  - Min confidence: “Min confidence: N%” (range slider)
+  - Buttons: **Clear**, **Refresh**
+  - Button: “Export CSV (max 10k)”
+  - Button: **Seed signals** (loading: **Seeding…**)
+- **Info card**
+  - “Raw AI evidence only — not management conclusions or GPT summaries. Export is capped at 10,000 rows.”
+- **Empty state**
+  - “No signals match filters. Try seeding demo data or adjusting filters.”
+- **Table headers**
+  - Camera
+  - Signal type
+  - Value
+  - Confidence
+  - Observed at
+  - Metadata
+- **Table footer hint**
+  - “Showing 200 of N signals. Add filters to narrow results.”
+
+### `/dashboard/school-management/ai-health` (Cameras & AI Health)
+
+- **Page title**: **Cameras & AI Health**
+- **Subtitle text**: “Stream health, signal freshness, and worker summary — operational evidence only (no management scores).”
+- **Top buttons**
+  - **Seed demo signals**
+  - **Refresh**
+  - **Worker health**
+  - **Signal timeline**
+- **No camera banner**
+  - “No cameras registered. Complete Phase 1 camera mapping first, then seed AI signals.”
+- **KPI card labels**
+  - “Camera Health Score (daily)”
+  - Active cameras
+  - Online
+  - Critical offline
+  - Stale signals
+  - Tampered
+- **List card**
+  - “Cameras reducing today’s health score”
+- **Filters**
+  - Purpose: dropdown default “All”
+  - Criticality: dropdown default “All”
+  - Checkbox label: “Stale only”
+- **States**
+  - “Loading health grid…”
+  - “No cameras match filters.”
+
+### `/dashboard/school-management/workers` (AI Workers)
+
+- **Page title**: **AI Workers**
+- **Subtitle text**: “Edge worker registry — heartbeat metrics and processing configuration.”
+- **Top buttons**
+  - “Seed workers + signals” (loading: **Seeding…**)
+  - **Refresh**
+- **Status cards**
+  - Healthy
+  - Stale
+  - Unhealthy
+- **Empty state**
+  - “No workers registered. Seed AI signals to register demo workers.”
+- **Worker card UI labels**
+  - “Heartbeat:” + “Never” (when missing)
+  - Toggle text: “▼ Show processing config” / “▲ Hide processing config”
+  - Section: “Enabled signals (N)”
+  - Keys in config: Camera ID, Sample rate, Min confidence, Snapshot, Active
+
+### `/dashboard/school-management/settings` (Settings)
+
+- **Page title**: **Settings**
+- **Subtitle text**: “Organization defaults, compliance checklist, teaching zones, and audit trail.”
+- **Cards**
+  - Phase 2 readiness
+    - Text: “Ready for Phase 2.” / “Complete missing items on overview.”
+    - Checkbox label: “Strict Phase 2 gate”
+  - Organization defaults
+    - Fields: Timezone, Academic year, Timetable overlaps (options: Block, Warn only)
+  - Compliance checklist
+    - Helper: “Restricted zones (link to risk areas)”
+  - Teaching zones — {camera name}
+    - Fields: “Board polygon (JSON)”, “Desk polygon (JSON)”
+  - Audit log
+- **Buttons**
+  - **Save settings**
+  - **Refresh**
 
 ## School Intelligence — per-page UI text inventory (labels, cards, buttons, filters)
 

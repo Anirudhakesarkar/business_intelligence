@@ -150,6 +150,15 @@ export function closeBatch(batchId: number, frameCount?: number) {
   return b;
 }
 
+export function listBatches(query: { cameraId?: number; workerId?: number; openOnly?: boolean; limit?: number } = {}) {
+  let rows = [...batches];
+  if (query.cameraId != null) rows = rows.filter((b) => b.cameraId === query.cameraId);
+  if (query.workerId != null) rows = rows.filter((b) => b.workerId === query.workerId);
+  if (query.openOnly) rows = rows.filter((b) => !b.endedAt);
+  rows = rows.sort((a, b) => b.startedAt.localeCompare(a.startedAt));
+  return rows.slice(0, query.limit ?? 100);
+}
+
 function isDuplicateSignal(input: IngestSignalInput) {
   const windowMs = 2000;
   const t = new Date(input.observedAt).getTime();

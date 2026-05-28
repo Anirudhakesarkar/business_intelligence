@@ -2,6 +2,23 @@ import { dbQuery, isDbEnabled } from './pool';
 import type { DailyOverallScore, ModuleScore } from '../school-score-engine/types';
 import type { GptSummaryRecord } from '../school-gpt-copilot/types';
 
+async function ensureWeightProfileRow(row: DailyOverallScore) {
+  if (!row.weightProfileId) return;
+  await dbQuery(
+    `INSERT INTO school_score_weight_profiles
+      (id, organization_id, profile_name, effective_from, weights)
+     VALUES ($1, $2, $3, $4, $5::jsonb)
+     ON CONFLICT (id) DO NOTHING`,
+    [
+      row.weightProfileId,
+      row.organizationId,
+      row.mvp3Mode ? 'mvp3' : 'default',
+      row.scoreDate,
+      JSON.stringify(row.weights ?? {}),
+    ]
+  );
+}
+
 export async function persistModuleScore(row: ModuleScore) {
   if (!isDbEnabled()) return;
   await dbQuery(
@@ -28,6 +45,7 @@ export async function persistModuleScore(row: ModuleScore) {
 
 export async function persistDailyScore(row: DailyOverallScore) {
   if (!isDbEnabled()) return;
+  await ensureWeightProfileRow(row);
   for (const m of row.moduleScores) {
     await persistModuleScore(m);
   }

@@ -1,7 +1,22 @@
 import '@/lib/school-persistence/init';
 import { NextRequest } from 'next/server';
 import { json, err } from '@/lib/school-ai-signals/json';
-import { closeBatch, openBatch } from '@/lib/school-ai-signals/store';
+import { closeBatch, listBatches, openBatch } from '@/lib/school-ai-signals/store';
+
+export async function GET(req: NextRequest) {
+  const cameraId = req.nextUrl.searchParams.get('cameraId');
+  const workerId = req.nextUrl.searchParams.get('workerId');
+  const openOnly = req.nextUrl.searchParams.get('openOnly');
+  const limit = req.nextUrl.searchParams.get('limit');
+  return json({
+    batches: listBatches({
+      cameraId: cameraId ? Number(cameraId) : undefined,
+      workerId: workerId ? Number(workerId) : undefined,
+      openOnly: openOnly === '1' || openOnly === 'true',
+      limit: limit ? Number(limit) : undefined,
+    }),
+  });
+}
 
 /** Spec alias: POST /api/ai-signal-batches */
 export async function POST(req: NextRequest) {

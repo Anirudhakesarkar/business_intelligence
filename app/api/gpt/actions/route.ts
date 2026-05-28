@@ -2,10 +2,45 @@ import '@/lib/school-persistence/init';
 import { NextRequest } from 'next/server';
 import { json, err } from '@/lib/school-gpt-copilot/json';
 import { createAction, createActionFromRecommendation, listActions } from '@/lib/school-gpt-copilot/store';
+import { dbQuery, isDbEnabled } from '@/lib/school-db/pool';
 
 export async function GET(req: NextRequest) {
   const organizationId = Number(req.nextUrl.searchParams.get('organizationId') ?? 1);
-  return json({ organizationId, actions: listActions(organizationId) });
+  const mem = listActions(organizationId);
+  if (mem.length > 0 || !isDbEnabled()) {
+    return json({ organizationId, actions: mem });
+  }
+  const r = await dbQuery<{
+    id: number;
+    organization_id: number;
+    recommendation_id: number | null;
+    summary_date: string;
+    title: string;
+    assignee: string | null;
+    status: 'open' | 'completed' | 'cancelled';
+    due_date: string | null;
+    completed_at: string | null;
+    created_at: string;
+  }>(
+    `SELECT id, organization_id, recommendation_id, summary_date, title, assignee, status, due_date, completed_at, created_at
+     FROM school_gpt_action_tasks
+     WHERE organization_id = $1
+     ORDER BY created_at DESC`,
+    [organizationId]
+  );
+  const actions = (r?.rows ?? []).map((row) => ({
+    id: row.id,
+    organizationId: row.organization_id,
+    recommendationId: row.recommendation_id ?? undefined,
+    summaryDate: row.summary_date,
+    title: row.title,
+    assignee: row.assignee ?? undefined,
+    status: row.status,
+    dueDate: row.due_date ?? undefined,
+    completedAt: row.completed_at ?? undefined,
+    createdAt: row.created_at,
+  }));
+  return json({ organizationId, actions });
 }
 
 export async function POST(req: NextRequest) {

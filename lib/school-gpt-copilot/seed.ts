@@ -8,7 +8,7 @@ function todayIso() {
 export async function seedSchoolGptPipeline(organizationId = 1, date?: string) {
   const d = date ?? todayIso();
   resetGptCopilotStore();
-  const pipeline = seedSchoolScorePipeline(organizationId, d);
+  const pipeline = await seedSchoolScorePipeline(organizationId, d);
   const gpt = await regenerateDailySummary(organizationId, d);
   return { organizationId, date: d, pipeline, gpt };
 }

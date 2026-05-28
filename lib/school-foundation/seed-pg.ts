@@ -26,10 +26,76 @@ const PURPOSES: CameraPurpose[] = [
 ];
 const PROCESS: ProcessOwner[] = ['Academic', 'Discipline', 'Compliance', 'ParentExperience', 'StudentOccupancy', 'StaffDeployment'];
 
+async function hasTable(tableName: string): Promise<boolean> {
+  const r = await dbQuery<{ exists: boolean }>(
+    `SELECT EXISTS (
+      SELECT 1 FROM information_schema.tables
+      WHERE table_schema = 'public' AND table_name = $1
+    ) AS "exists"`,
+    [tableName],
+  );
+  return Boolean(r?.rows?.[0]?.exists);
+}
+
 /** Remove all foundation master data for an org in Postgres (and in-memory cache). */
 export async function clearFoundationForOrg(organizationId: number) {
   if (!isDbEnabled()) return;
   const pgOrg = resolveOrgIdForPg(organizationId);
+  const siteTable = (await hasTable('school_sites')) ? 'school_sites' : (await hasTable('school_campuses')) ? 'school_campuses' : null;
+  const buildingSiteCol = (await hasTable('school_buildings'))
+    ? (await hasTable('school_sites') ? 'site_id' : 'campus_id')
+    : null;
+
+  // Remove spatial tree by org via joins (safe even when FK cascade behavior differs across local schemas).
+  if (siteTable && buildingSiteCol && await hasTable('school_rooms')) {
+    await dbQuery(
+      `DELETE FROM school_rooms
+       WHERE zone_id IN (
+         SELECT z.id
+         FROM school_zones z
+         JOIN school_floors f ON f.id = z.floor_id
+         JOIN school_buildings b ON b.id = f.building_id
+         JOIN ${siteTable} s ON s.id = b.${buildingSiteCol}
+         WHERE s.organization_id = $1
+       )`,
+      [pgOrg]
+    );
+  }
+  if (siteTable && buildingSiteCol && await hasTable('school_zones')) {
+    await dbQuery(
+      `DELETE FROM school_zones
+       WHERE floor_id IN (
+         SELECT f.id
+         FROM school_floors f
+         JOIN school_buildings b ON b.id = f.building_id
+         JOIN ${siteTable} s ON s.id = b.${buildingSiteCol}
+         WHERE s.organization_id = $1
+       )`,
+      [pgOrg]
+    );
+  }
+  if (siteTable && buildingSiteCol && await hasTable('school_floors')) {
+    await dbQuery(
+      `DELETE FROM school_floors
+       WHERE building_id IN (
+         SELECT b.id
+         FROM school_buildings b
+         JOIN ${siteTable} s ON s.id = b.${buildingSiteCol}
+         WHERE s.organization_id = $1
+       )`,
+      [pgOrg]
+    );
+  }
+  if (siteTable && buildingSiteCol && await hasTable('school_buildings')) {
+    await dbQuery(
+      `DELETE FROM school_buildings
+       WHERE ${buildingSiteCol} IN (
+         SELECT id FROM ${siteTable} WHERE organization_id = $1
+       )`,
+      [pgOrg]
+    );
+  }
+
   const tables = [
     'school_timetable_entries',
     'school_staff_duty_rosters',
@@ -43,7 +109,13 @@ export async function clearFoundationForOrg(organizationId: number) {
     'school_sites',
   ];
   for (const table of tables) {
-    await dbQuery(`DELETE FROM ${table} WHERE organization_id = $1`, [pgOrg]);
+    if (await hasTable(table)) {
+      await dbQuery(`DELETE FROM ${table} WHERE organization_id = $1`, [pgOrg]);
+    }
+  }
+  // Some DBs use campus naming; clean that path too.
+  if (await hasTable('school_campuses')) {
+    await dbQuery(`DELETE FROM school_campuses WHERE organization_id = $1`, [pgOrg]);
   }
   resetStoreForSeed();
 }

@@ -18,18 +18,18 @@ describe('school-foundation setup health', () => {
     assert.match(next!.href, /cameras/);
   });
 
-  it('setup health includes calendar summary and next action fields', () => {
+  it('setup health includes calendar summary and next action fields', async () => {
     resetStoreForSeed();
-    seedDemoSchool(1);
+    await seedDemoSchool(1);
     const health = getSetupHealth(1);
     assert.ok(health.calendarSummary.totalDays >= 30);
     assert.ok('nextAction' in health);
     assert.ok(health.completionPercent >= 0);
   });
 
-  it('next action points to cameras when active cameras are unmapped', () => {
+  it('next action points to cameras when active cameras are unmapped', async () => {
     resetStoreForSeed();
-    seedDemoSchool(1);
+    await seedDemoSchool(1);
     for (const c of db.cameras().filter((x) => x.organizationId === 1 && x.status === 'Active')) {
       c.zoneId = undefined;
       c.roomId = undefined;
@@ -39,16 +39,16 @@ describe('school-foundation setup health', () => {
     assert.match(next!.href, /cameras/);
   });
 
-  it('logs audit on calendar and roster create', () => {
+  it('logs audit on calendar and roster create', async () => {
     resetStoreForSeed();
-    seedDemoSchool(1);
+    await seedDemoSchool(1);
     const before = db.auditLog().length;
     const zone = db.zones()[0];
     const staff = db.staff()[0];
     createCalendarDay({ organizationId: 1, calendarDate: '2099-12-01', dayType: 'Holiday', label: 'Test' });
     createDutyRoster({
       organizationId: 1,
-      staffId: staff.id,
+      staffMemberId: staff.id,
       zoneId: zone.id,
       dutyType: 'Gate',
       dayOfWeek: 1,

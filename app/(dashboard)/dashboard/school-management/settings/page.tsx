@@ -40,22 +40,32 @@ export default function Page() {
   const [saving, setSaving] = useState(false);
 
   const load = () => {
-    void schoolFetch('/api/school-management/settings?organizationId=1').then((r) => r.json()).then((s: Settings) => {
-      setSettings(s);
-      if (s.compliance?.auditChecklist?.length) {
-        /* keep */
-      }
-    });
-    void schoolFetch('/api/zones').then((r) => r.json()).then(setZones);
-    void schoolFetch('/api/cameras?organizationId=1').then((r) => r.json()).then((cams: Camera[]) => {
-      const cam = cams.find((c) => c.purpose === 'Classroom') ?? cams[0];
-      setClassroomCam(cam ?? null);
-      if (cam?.metadata?.teachingZones?.boardPolygon) {
-        setBoardJson(JSON.stringify(cam.metadata.teachingZones.boardPolygon));
-        setDeskJson(JSON.stringify(cam.metadata.teachingZones.deskPolygon ?? []));
-      }
-    });
-    void schoolFetch('/api/school-management/audit-log?limit=30').then((r) => r.json()).then((j) => setAudit(j.entries ?? []));
+    void schoolFetch('/api/school-management/settings?organizationId=1')
+      .then((r) => r.json())
+      .then((s: Settings) => {
+        setSettings(s);
+      })
+      .catch(() => setSettings(null));
+    void schoolFetch('/api/zones')
+      .then((r) => r.json())
+      .then((payload) => setZones(Array.isArray(payload) ? payload : []))
+      .catch(() => setZones([]));
+    void schoolFetch('/api/cameras?organizationId=1')
+      .then((r) => r.json())
+      .then((payload) => {
+        const cams = Array.isArray(payload) ? (payload as Camera[]) : [];
+        const cam = cams.find((c) => c.purpose === 'Classroom') ?? cams[0] ?? null;
+        setClassroomCam(cam);
+        if (cam?.metadata?.teachingZones?.boardPolygon) {
+          setBoardJson(JSON.stringify(cam.metadata.teachingZones.boardPolygon));
+          setDeskJson(JSON.stringify(cam.metadata.teachingZones.deskPolygon ?? []));
+        }
+      })
+      .catch(() => setClassroomCam(null));
+    void schoolFetch('/api/school-management/audit-log?limit=30')
+      .then((r) => r.json())
+      .then((j) => setAudit(Array.isArray(j?.entries) ? j.entries : []))
+      .catch(() => setAudit([]));
   };
 
   useEffect(() => { load(); }, []);

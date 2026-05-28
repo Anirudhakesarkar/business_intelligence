@@ -1,7 +1,7 @@
 import type { CalendarDay, DayType, DutyRoster, TimeWindow, TimetableEntry } from '../types';
 import { orgIdFromPg, resolveOrgIdForPg } from '../../school-db/organization-id';
 import { db as memDb, logAudit, _ensureNextIdAbove } from '../store';
-import { dbQuery, num, requirePool } from './shared';
+import { dbQuery, isDbEnabled, num, requirePool } from './shared';
 
 function timeToStr(t: string | Date | null): string {
   if (!t) return '';
@@ -41,6 +41,11 @@ function mirrorCalendar(row: CalendarDay) {
 }
 
 export async function listCalendarDays(organizationId?: number | string): Promise<CalendarDay[]> {
+  if (!isDbEnabled()) {
+    if (organizationId == null) return [...memDb.calendar()];
+    const org = Number(organizationId);
+    return memDb.calendar().filter((c) => c.organizationId === org);
+  }
   requirePool();
   const sql = organizationId
     ? `SELECT id, organization_id, calendar_date, day_type, label, timing_override FROM school_calendars WHERE organization_id = $1 ORDER BY calendar_date`
@@ -121,6 +126,11 @@ function mirrorTimeWindow(row: TimeWindow) {
 }
 
 export async function listTimeWindows(organizationId?: number | string): Promise<TimeWindow[]> {
+  if (!isDbEnabled()) {
+    if (organizationId == null) return [...memDb.timeWindows()];
+    const org = Number(organizationId);
+    return memDb.timeWindows().filter((t) => t.organizationId === org);
+  }
   requirePool();
   const sql = organizationId
     ? `SELECT id, organization_id, name, window_type, start_time, end_time, is_active FROM school_time_windows WHERE organization_id = $1 ORDER BY id`
@@ -202,6 +212,11 @@ function periodsOverlap(aStart: string, aEnd: string, bStart: string, bEnd: stri
 }
 
 export async function listTimetableEntries(organizationId?: number | string): Promise<TimetableEntry[]> {
+  if (!isDbEnabled()) {
+    if (organizationId == null) return [...memDb.timetable()];
+    const org = Number(organizationId);
+    return memDb.timetable().filter((t) => t.organizationId === org);
+  }
   requirePool();
   const sql = organizationId
     ? `SELECT id, organization_id, section_id, subject_id, room_id, teacher_id, period_type, day_of_week, start_time, end_time, is_active
@@ -326,6 +341,11 @@ function mirrorRoster(row: DutyRoster) {
 }
 
 export async function listDutyRosters(organizationId?: number | string): Promise<DutyRoster[]> {
+  if (!isDbEnabled()) {
+    if (organizationId == null) return [...memDb.rosters()];
+    const org = Number(organizationId);
+    return memDb.rosters().filter((r) => r.organizationId === org);
+  }
   requirePool();
   const sql = organizationId
     ? `SELECT id, organization_id, staff_member_id, zone_id, duty_type, day_of_week, start_time, end_time, is_critical_window, is_active

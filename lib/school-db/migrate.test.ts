@@ -4,9 +4,10 @@ import { runSchoolMigrations, SCHOOL_MIGRATION_FILES } from './migrate';
 
 describe('school-db migrate', () => {
   it('lists school migration files', () => {
-    assert.equal(SCHOOL_MIGRATION_FILES.length, 8);
+    assert.equal(SCHOOL_MIGRATION_FILES.length, 10);
     assert.ok(SCHOOL_MIGRATION_FILES.includes('071_school_score_engine.sql'));
     assert.ok(SCHOOL_MIGRATION_FILES.includes('073_school_runtime_snapshot.sql'));
+    assert.ok(SCHOOL_MIGRATION_FILES.includes('074_school_campuses_align.sql'));
   });
 
   it('returns error when DATABASE_URL unset', async () => {

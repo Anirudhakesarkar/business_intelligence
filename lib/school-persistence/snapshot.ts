@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { persistRuntimeSnapshot } from '../school-db/persist-snapshot';
+import { isDbEnabled } from '../school-db/pool';
 import { db as foundationDb, resetStoreForSeed } from '../school-foundation/store';
 import { aiDb, resetAiSignalsStore } from '../school-ai-signals/store';
 import { ruleDb, resetRuleEngineStore } from '../school-rule-engine/store';
@@ -114,6 +115,9 @@ export function loadSnapshot() {
 let lastLoadedMtime = 0;
 
 export function ensureSnapshotLoaded() {
+  // In DB-backed mode, Postgres is the source of truth.
+  // Avoid re-hydrating in-memory stores from file snapshot to prevent drift.
+  if (isDbEnabled()) return;
   if (!snapshotEnabled()) return;
   if (!existsSync(SNAPSHOT_PATH)) return;
   const mtime = statSync(SNAPSHOT_PATH).mtimeMs;

@@ -5,7 +5,7 @@ import { getPool, isDbEnabled } from './pool';
 
 const MIGRATION_DIR = join(process.cwd(), 'db/migrations');
 
-/** School Intelligence migrations (067–072) plus organizations bootstrap. */
+/** School Intelligence migrations plus organizations bootstrap. */
 export const SCHOOL_MIGRATION_FILES = [
   'create_organizations_table.sql',
   '067_school_foundation.sql',
@@ -15,6 +15,8 @@ export const SCHOOL_MIGRATION_FILES = [
   '071_school_score_engine.sql',
   '072_school_gpt_copilot.sql',
   '073_school_runtime_snapshot.sql',
+  '074_school_campuses_align.sql',
+  '074_school_mgmt_cameras_align.sql',
 ] as const;
 
 export type MigrateResult = {
@@ -39,6 +41,7 @@ export async function runSchoolMigrations(): Promise<MigrateResult> {
       applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `);
+  const migrationStampExpr = await detectMigrationAppliedAtExpression(pool);
 
   const applied: string[] = [];
   const skipped: string[] = [];
@@ -52,7 +55,12 @@ export async function runSchoolMigrations(): Promise<MigrateResult> {
       if (reg.rows[0]?.exists) {
         const exists = await pool.query('SELECT 1 FROM schema_migrations WHERE file = $1', [file]);
         if ((exists.rowCount ?? 0) === 0) {
-          await pool.query('INSERT INTO schema_migrations (file) VALUES ($1) ON CONFLICT DO NOTHING', [file]);
+          await pool.query(
+            `INSERT INTO schema_migrations (file, applied_at)
+             VALUES ($1, ${migrationStampExpr})
+             ON CONFLICT DO NOTHING`,
+            [file]
+          );
         }
         skipped.push(file);
         continue;
@@ -69,7 +77,11 @@ export async function runSchoolMigrations(): Promise<MigrateResult> {
     try {
       await client.query('BEGIN');
       await client.query(sql);
-      await client.query('INSERT INTO schema_migrations (file) VALUES ($1)', [file]);
+      await client.query(
+        `INSERT INTO schema_migrations (file, applied_at)
+         VALUES ($1, ${migrationStampExpr})`,
+        [file]
+      );
       await client.query('COMMIT');
       applied.push(file);
     } catch (e) {
@@ -88,19 +100,46 @@ export async function runSchoolMigrations(): Promise<MigrateResult> {
   return { ok: errors.length === 0, applied, skipped, errors };
 }
 
+async function detectMigrationAppliedAtExpression(pool: NonNullable<ReturnType<typeof getPool>>) {
+  const typeRes = await pool.query<{ data_type: string }>(
+    `SELECT data_type
+     FROM information_schema.columns
+     WHERE table_schema = 'public'
+       AND table_name = 'schema_migrations'
+       AND column_name = 'applied_at'
+     LIMIT 1`
+  );
+  const dataType = typeRes.rows[0]?.data_type?.toLowerCase() ?? '';
+  if (dataType.includes('bigint')) {
+    return `EXTRACT(EPOCH FROM NOW())::bigint`;
+  }
+  return `NOW()`;
+}
+
 async function seedDemoOrganization(pool: NonNullable<ReturnType<typeof getPool>>) {
+  const nameColCheck = await pool.query<{ exists: boolean }>(
+    `SELECT EXISTS (
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_schema='public' AND table_name='organizations' AND column_name='organization_name'
+    ) AS "exists"`,
+  );
+  const orgNameColumn = nameColCheck.rows[0]?.exists ? 'organization_name' : 'name';
   await pool.query(
     `INSERT INTO organizations (
-      organization_name, organization_code, industry_type,
+      ${orgNameColumn}, organization_code, industry_type,
       registered_address, city, state, country, pincode,
       primary_contact_name, primary_contact_mobile, primary_contact_email,
       organization_status, is_active, is_deleted
-    ) VALUES (
+    )
+    SELECT
       'Demo School', 'DEMO-SCHOOL', 'Education',
       '12 Campus Road', 'Mumbai', 'Maharashtra', 'India', '400001',
       'Principal Demo', '9000000001', 'principal@demo.school',
       'Active', TRUE, FALSE
-    ) ON CONFLICT (organization_code) DO NOTHING`,
+    WHERE NOT EXISTS (
+      SELECT 1 FROM organizations WHERE organization_code = 'DEMO-SCHOOL'
+    )`,
   );
 }
 async function seedScoreDefinitions(pool: NonNullable<ReturnType<typeof getPool>>) {

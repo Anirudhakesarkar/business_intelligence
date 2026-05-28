@@ -11,11 +11,11 @@ import {
 import { dailyDb } from '../school-daily-summaries/store';
 
 describe('school-score-engine module API shape', () => {
-  it('parent module returns dispersal crowding as top driver when congested', () => {
+  it('parent module returns dispersal crowding as top driver when congested', async () => {
     resetScoreEngineStore();
     const date = '2099-08-01';
-    seedDemoSchool(1);
-    seedSchoolDailySummariesPipeline(1, date);
+    await seedDemoSchool(1);
+    await seedSchoolDailySummariesPipeline(1, date);
     const scoreInput = dailyDb.scoreInputs().find((r) => r.organizationId === 1 && r.summaryDate === date);
     if (scoreInput?.inputsJson) {
       scoreInput.inputsJson = {
@@ -31,15 +31,15 @@ describe('school-score-engine module API shape', () => {
     assert.ok(detail.trend_delta === null || typeof detail.trend_delta === 'number');
   });
 
-  it('module trend returns 30 daily points from score store without signal queries', () => {
+  it('module trend returns 30 daily points from score store without signal queries', async () => {
     resetScoreEngineStore();
     const endDate = '2099-08-10';
-    seedDemoSchool(1);
+    await seedDemoSchool(1);
     for (let i = 0; i < 30; i++) {
       const d = new Date(`${endDate}T12:00:00.000Z`);
       d.setUTCDate(d.getUTCDate() - i);
       const iso = d.toISOString().slice(0, 10);
-      seedSchoolDailySummariesPipeline(1, iso);
+      await seedSchoolDailySummariesPipeline(1, iso);
       calculateScoresForDay(1, iso);
     }
     const points = getModuleScoreHistory(1, 'teacher', endDate, 30);

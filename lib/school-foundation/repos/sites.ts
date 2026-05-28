@@ -18,7 +18,7 @@ import type { Site } from '../types';
 import { orgIdFromPg, resolveOrgIdForPg } from '../../school-db/organization-id';
 import { dbQuery, isDbEnabled } from '../../school-db/pool';
 import { db as memDb, logAudit, _ensureNextIdAbove } from '../store';
-import { DbDisabledError, requirePool } from './shared';
+import { DbDisabledError, columnExists, requirePool, tableExists } from './shared';
 
 export { DbDisabledError };
 
@@ -29,6 +29,24 @@ type SiteRow = {
   address: string | null;
   is_active: boolean;
 };
+
+type SiteSchema = { table: 'school_sites' | 'school_campuses'; nameColumn: 'name' | 'campus_name' };
+
+let siteSchemaCache: SiteSchema | null = null;
+async function resolveSiteSchema(): Promise<SiteSchema> {
+  if (siteSchemaCache) return siteSchemaCache;
+  if (await tableExists('school_sites')) {
+    siteSchemaCache = { table: 'school_sites', nameColumn: 'name' };
+    return siteSchemaCache;
+  }
+  if (await tableExists('school_campuses')) {
+    const hasName = await columnExists('school_campuses', 'name');
+    siteSchemaCache = { table: 'school_campuses', nameColumn: hasName ? 'name' : 'campus_name' };
+    return siteSchemaCache;
+  }
+  siteSchemaCache = { table: 'school_sites', nameColumn: 'name' };
+  return siteSchemaCache;
+}
 
 function fromRow(r: SiteRow): Site {
   return {
@@ -60,12 +78,18 @@ function mirrorDelete(id: number) {
 }
 
 export async function listSites(organizationId?: number | string): Promise<Site[]> {
+  if (!isDbEnabled()) {
+    if (organizationId === undefined) return [...memDb.sites()];
+    const org = Number(organizationId);
+    return memDb.sites().filter((s) => s.organizationId === org);
+  }
   requirePool();
+  const schema = await resolveSiteSchema();
   const pgOrgId = organizationId !== undefined ? resolveOrgIdForPg(organizationId) : undefined;
   const sql = pgOrgId
-    ? `SELECT id, organization_id, name, address, is_active
-       FROM school_sites WHERE organization_id = $1 ORDER BY id`
-    : `SELECT id, organization_id, name, address, is_active FROM school_sites ORDER BY id`;
+    ? `SELECT id, organization_id, ${schema.nameColumn} AS name, address, is_active
+       FROM ${schema.table} WHERE organization_id = $1 ORDER BY id`
+    : `SELECT id, organization_id, ${schema.nameColumn} AS name, address, is_active FROM ${schema.table} ORDER BY id`;
   const params = pgOrgId ? [pgOrgId] : [];
   const r = await dbQuery<SiteRow>(sql, params);
   const rows = (r?.rows ?? []).map(fromRow);
@@ -76,8 +100,9 @@ export async function listSites(organizationId?: number | string): Promise<Site[
 
 export async function getSiteById(id: number): Promise<Site | null> {
   requirePool();
+  const schema = await resolveSiteSchema();
   const r = await dbQuery<SiteRow>(
-    `SELECT id, organization_id, name, address, is_active FROM school_sites WHERE id = $1`,
+    `SELECT id, organization_id, ${schema.nameColumn} AS name, address, is_active FROM ${schema.table} WHERE id = $1`,
     [id],
   );
   const row = r?.rows[0];
@@ -96,11 +121,12 @@ export type CreateSiteInput = {
 
 export async function createSite(input: CreateSiteInput): Promise<Site> {
   requirePool();
+  const schema = await resolveSiteSchema();
   if (!input.name?.trim()) throw new Error('Name required');
   const r = await dbQuery<SiteRow>(
-    `INSERT INTO school_sites (organization_id, name, address, is_active)
+    `INSERT INTO ${schema.table} (organization_id, ${schema.nameColumn}, address, is_active)
      VALUES ($1, $2, $3, $4)
-     RETURNING id, organization_id, name, address, is_active`,
+     RETURNING id, organization_id, ${schema.nameColumn} AS name, address, is_active`,
     [
       resolveOrgIdForPg(input.organizationId),
       input.name.trim(),
@@ -119,6 +145,7 @@ export type PatchSiteInput = Partial<Pick<Site, 'name' | 'address' | 'isActive'>
 
 export async function patchSite(id: number, patch: PatchSiteInput): Promise<Site> {
   requirePool();
+  const schema = await resolveSiteSchema();
   if (patch.name !== undefined && !String(patch.name).trim()) {
     throw new Error('Name required');
   }
@@ -129,7 +156,7 @@ export async function patchSite(id: number, patch: PatchSiteInput): Promise<Site
   const params: unknown[] = [];
   let idx = 1;
   if (patch.name !== undefined) {
-    sets.push(`name = $${idx++}`);
+    sets.push(`${schema.nameColumn} = $${idx++}`);
     params.push(patch.name.trim());
   }
   if (patch.address !== undefined) {
@@ -144,8 +171,8 @@ export async function patchSite(id: number, patch: PatchSiteInput): Promise<Site
   params.push(id);
 
   const r = await dbQuery<SiteRow>(
-    `UPDATE school_sites SET ${sets.join(', ')} WHERE id = $${idx}
-     RETURNING id, organization_id, name, address, is_active`,
+    `UPDATE ${schema.table} SET ${sets.join(', ')} WHERE id = $${idx}
+     RETURNING id, organization_id, ${schema.nameColumn} AS name, address, is_active`,
     params,
   );
   if (!r?.rows[0]) throw new Error('Site not found');
@@ -157,6 +184,7 @@ export async function patchSite(id: number, patch: PatchSiteInput): Promise<Site
 
 export async function deleteSite(id: number): Promise<{ ok: true }> {
   requirePool();
+  const schema = await resolveSiteSchema();
   const before = await getSiteById(id);
   if (!before) throw new Error('Site not found');
   // school_buildings (and downstream tables) have ON DELETE CASCADE in migration 067,
@@ -164,7 +192,7 @@ export async function deleteSite(id: number): Promise<{ ok: true }> {
   // in Postgres. The in-memory cascade in store.ts only matters for the in-memory
   // copies of those rows, which are still present until those entities are also
   // migrated to PG-backed repos.
-  await dbQuery(`DELETE FROM school_sites WHERE id = $1`, [id]);
+  await dbQuery(`DELETE FROM ${schema.table} WHERE id = $1`, [id]);
   mirrorDelete(id);
   logAudit('delete', 'site', id, undefined, before);
   return { ok: true };
@@ -178,8 +206,9 @@ export async function deleteSite(id: number): Promise<{ ok: true }> {
  */
 export async function hydrateSitesFromPg(): Promise<{ hydrated: number }> {
   if (!isDbEnabled()) return { hydrated: 0 };
+  const schema = await resolveSiteSchema();
   const r = await dbQuery<SiteRow>(
-    `SELECT id, organization_id, name, address, is_active FROM school_sites`,
+    `SELECT id, organization_id, ${schema.nameColumn} AS name, address, is_active FROM ${schema.table}`,
   );
   const rows = (r?.rows ?? []).map(fromRow);
   for (const row of rows) mirrorInsert(row);

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
@@ -13,10 +13,9 @@ const ORG_ID = 1;
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Row = Record<string, unknown>;
 type MappingStatus = {
-  mappingPercent?: number;
-  totalCameras?: number;
-  unmappedCount?: number;
-  classroomMissingRoom?: number;
+  percent?: number;
+  total?: number;
+  mapped?: number;
 };
 type CameraImportResult = {
   errors?: string[];
@@ -99,10 +98,10 @@ function SHdr({ title, onClose }: { title: string; onClose: () => void }) {
 function MappingStatusBanner() {
   const { data } = useMappingStatus();
   if (!data) return null;
-  const pct = data.mappingPercent ?? 0;
-  const totalCameras = data.totalCameras ?? 0;
-  const unmappedCount = data.unmappedCount ?? 0;
-  const classroomMissingRoom = data.classroomMissingRoom ?? 0;
+  const pct = data.percent ?? 0;
+  const totalCameras = data.total ?? 0;
+  const mapped = data.mapped ?? 0;
+  const unmappedCount = Math.max(totalCameras - mapped, 0);
   const color = pct >= 90 ? 'border-green-500/30 bg-green-500/5' : pct >= 60 ? 'border-amber-500/30 bg-amber-500/5' : 'border-red-500/30 bg-red-500/5';
   const textColor = pct >= 90 ? 'text-green-400' : pct >= 60 ? 'text-amber-400' : 'text-red-400';
   return (
@@ -112,7 +111,6 @@ function MappingStatusBanner() {
         <span className="ml-2 text-xs text-slate-500">{totalCameras} total cameras</span>
       </div>
       {unmappedCount > 0 && <span className="text-xs text-amber-400">{unmappedCount} camera(s) missing location or purpose</span>}
-      {classroomMissingRoom > 0 && <span className="text-xs text-red-400">{classroomMissingRoom} classroom/lab camera(s) missing room assignment</span>}
     </div>
   );
 }
@@ -265,14 +263,14 @@ function CameraFormSheet({ open, onClose, editing }: { open: boolean; onClose: (
   const [err, setErr] = useState('');
 
   // Populate form when editing changes
-  useState(() => {
+  useEffect(() => {
     if (editing) {
       setForm({ cameraCode: String(editing.cameraCode ?? ''), purpose: String(editing.purpose ?? 'Classroom'), processOwner: String(editing.processOwner ?? 'Academic'), criticality: String(editing.criticality ?? 'Medium'), zoneId: String(editing.zoneId ?? ''), roomId: String(editing.roomId ?? ''), activeFrom: String(editing.activeFrom ?? ''), activeTo: String(editing.activeTo ?? '') });
     } else {
       setForm(emptyForm());
     }
     setErr('');
-  });
+  }, [editing, open]);
 
   const create = useMutation({
     mutationFn: (b: unknown) => schoolApiPost('/api/cameras', b),

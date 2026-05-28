@@ -1,7 +1,7 @@
 import type { Criticality, SchoolCamera } from '../types';
 import { orgIdFromPg, resolveOrgIdForPg } from '../../school-db/organization-id';
 import { db as memDb, logAudit, _ensureNextIdAbove } from '../store';
-import { dbQuery, num, requirePool } from './shared';
+import { dbQuery, isDbEnabled, num, requirePool } from './shared';
 
 type CameraRow = {
   id: string | number;
@@ -61,6 +61,11 @@ function validateCameraInput(input: Partial<SchoolCamera>) {
 }
 
 export async function listCameras(organizationId?: number | string): Promise<SchoolCamera[]> {
+  if (!isDbEnabled()) {
+    if (organizationId == null) return [...memDb.cameras()];
+    const org = Number(organizationId);
+    return memDb.cameras().filter((c) => c.organizationId === org);
+  }
   requirePool();
   const sql = organizationId
     ? `SELECT id, organization_id, zone_id, room_id, camera_code, name, stream_url, purpose, process_owner,

@@ -1,7 +1,25 @@
 import type { Building, Floor, Room, Zone } from '../types';
 import { orgIdFromPg, resolveOrgIdForPg } from '../../school-db/organization-id';
 import { db as memDb, logAudit, _ensureNextIdAbove } from '../store';
-import { dbQuery, num, requirePool } from './shared';
+import { columnExists, dbQuery, isDbEnabled, num, requirePool, tableExists } from './shared';
+
+let buildingSiteColumnCache: 'site_id' | 'campus_id' | null = null;
+async function resolveBuildingSiteColumn(): Promise<'site_id' | 'campus_id'> {
+  if (buildingSiteColumnCache) return buildingSiteColumnCache;
+  if (await columnExists('school_buildings', 'site_id')) {
+    buildingSiteColumnCache = 'site_id';
+    return buildingSiteColumnCache;
+  }
+  buildingSiteColumnCache = 'campus_id';
+  return buildingSiteColumnCache;
+}
+
+let siteTableCache: 'school_sites' | 'school_campuses' | null = null;
+async function resolveSiteTable(): Promise<'school_sites' | 'school_campuses'> {
+  if (siteTableCache) return siteTableCache;
+  siteTableCache = (await tableExists('school_sites')) ? 'school_sites' : 'school_campuses';
+  return siteTableCache;
+}
 
 // ─── Buildings ───────────────────────────────────────────────────────────────
 
@@ -20,18 +38,24 @@ function mirrorBuilding(row: Building) {
 }
 
 async function getBuildingById(id: number): Promise<Building | null> {
+  const siteColumn = await resolveBuildingSiteColumn();
   const r = await dbQuery<BuildingRow>(
-    `SELECT id, site_id, name, is_active FROM school_buildings WHERE id = $1`,
+    `SELECT id, ${siteColumn} AS site_id, name, is_active FROM school_buildings WHERE id = $1`,
     [id],
   );
   return r?.rows[0] ? buildingFromRow(r.rows[0]) : null;
 }
 
 export async function listBuildings(siteId?: number): Promise<Building[]> {
+  if (!isDbEnabled()) {
+    if (siteId == null) return [...memDb.buildings()];
+    return memDb.buildings().filter((b) => b.siteId === siteId);
+  }
   requirePool();
+  const siteColumn = await resolveBuildingSiteColumn();
   const sql = siteId
-    ? `SELECT id, site_id, name, is_active FROM school_buildings WHERE site_id = $1 ORDER BY id`
-    : `SELECT id, site_id, name, is_active FROM school_buildings ORDER BY id`;
+    ? `SELECT id, ${siteColumn} AS site_id, name, is_active FROM school_buildings WHERE ${siteColumn} = $1 ORDER BY id`
+    : `SELECT id, ${siteColumn} AS site_id, name, is_active FROM school_buildings ORDER BY id`;
   const params = siteId ? [siteId] : [];
   const r = await dbQuery<BuildingRow>(sql, params);
   const rows = (r?.rows ?? []).map(buildingFromRow);
@@ -41,9 +65,10 @@ export async function listBuildings(siteId?: number): Promise<Building[]> {
 
 export async function createBuilding(input: Omit<Building, 'id'>): Promise<Building> {
   requirePool();
+  const siteColumn = await resolveBuildingSiteColumn();
   const r = await dbQuery<BuildingRow>(
-    `INSERT INTO school_buildings (site_id, name, is_active) VALUES ($1, $2, $3)
-     RETURNING id, site_id, name, is_active`,
+    `INSERT INTO school_buildings (${siteColumn}, name, is_active) VALUES ($1, $2, $3)
+     RETURNING id, ${siteColumn} AS site_id, name, is_active`,
     [input.siteId, input.name.trim(), input.isActive ?? true],
   );
   if (!r?.rows[0]) throw new Error('Failed to create building');
@@ -57,6 +82,7 @@ export type PatchBuildingInput = Partial<Pick<Building, 'siteId' | 'name' | 'isA
 
 export async function patchBuilding(id: number, patch: PatchBuildingInput): Promise<Building> {
   requirePool();
+  const siteColumn = await resolveBuildingSiteColumn();
   if (patch.name !== undefined && !String(patch.name).trim()) throw new Error('Name required');
   const before = await getBuildingById(id);
   if (!before) throw new Error('Building not found');
@@ -65,7 +91,7 @@ export async function patchBuilding(id: number, patch: PatchBuildingInput): Prom
   const params: unknown[] = [];
   let idx = 1;
   if (patch.siteId !== undefined) {
-    sets.push(`site_id = $${idx++}`);
+    sets.push(`${siteColumn} = $${idx++}`);
     params.push(patch.siteId);
   }
   if (patch.name !== undefined) {
@@ -81,7 +107,7 @@ export async function patchBuilding(id: number, patch: PatchBuildingInput): Prom
 
   const r = await dbQuery<BuildingRow>(
     `UPDATE school_buildings SET ${sets.join(', ')} WHERE id = $${idx}
-     RETURNING id, site_id, name, is_active`,
+     RETURNING id, ${siteColumn} AS site_id, name, is_active`,
     params,
   );
   if (!r?.rows[0]) throw new Error('Building not found');
@@ -133,6 +159,10 @@ async function getFloorById(id: number): Promise<Floor | null> {
 }
 
 export async function listFloors(buildingId?: number): Promise<Floor[]> {
+  if (!isDbEnabled()) {
+    if (buildingId == null) return [...memDb.floors()];
+    return memDb.floors().filter((f) => f.buildingId === buildingId);
+  }
   requirePool();
   const sql = buildingId
     ? `SELECT id, building_id, name, level_no FROM school_floors WHERE building_id = $1 ORDER BY id`
@@ -253,6 +283,10 @@ async function getZoneById(id: number): Promise<Zone | null> {
 }
 
 export async function listZones(floorId?: number): Promise<Zone[]> {
+  if (!isDbEnabled()) {
+    if (floorId == null) return [...memDb.zones()];
+    return memDb.zones().filter((z) => z.floorId === floorId);
+  }
   requirePool();
   const sql = floorId
     ? `SELECT id, floor_id, name, zone_type, is_risk_zone, risk_category, capacity
@@ -420,6 +454,15 @@ async function getRoomById(id: number): Promise<Room | null> {
 }
 
 export async function listRooms(organizationId?: number | string): Promise<Room[]> {
+  if (!isDbEnabled()) {
+    if (organizationId == null) return [...memDb.rooms()];
+    const org = Number(organizationId);
+    const siteIds = memDb.sites().filter((s) => s.organizationId === org).map((s) => s.id);
+    const buildingIds = memDb.buildings().filter((b) => siteIds.includes(b.siteId)).map((b) => b.id);
+    const floorIds = memDb.floors().filter((f) => buildingIds.includes(f.buildingId)).map((f) => f.id);
+    const zoneIds = memDb.zones().filter((z) => z.floorId != null && floorIds.includes(z.floorId)).map((z) => z.id);
+    return memDb.rooms().filter((r) => r.zoneId != null && zoneIds.includes(r.zoneId));
+  }
   requirePool();
   if (organizationId === undefined) {
     const r = await dbQuery<RoomRow>(
@@ -430,13 +473,15 @@ export async function listRooms(organizationId?: number | string): Promise<Room[
     return rows;
   }
   const pgOrgId = resolveOrgIdForPg(organizationId);
+  const siteTable = await resolveSiteTable();
+  const siteColumn = await resolveBuildingSiteColumn();
   const r = await dbQuery<RoomRow>(
     `SELECT DISTINCT r.id, r.zone_id, r.room_code, r.room_name, r.room_type, r.capacity, r.is_active
      FROM school_rooms r
      JOIN school_zones z ON z.id = r.zone_id
      JOIN school_floors f ON f.id = z.floor_id
      JOIN school_buildings b ON b.id = f.building_id
-     JOIN school_sites s ON s.id = b.site_id
+     JOIN ${siteTable} s ON s.id = b.${siteColumn}
      WHERE s.organization_id = $1
      ORDER BY r.id`,
     [pgOrgId],

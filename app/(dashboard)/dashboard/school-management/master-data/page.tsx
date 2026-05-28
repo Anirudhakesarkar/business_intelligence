@@ -438,16 +438,16 @@ function Panel({ title, description, count, onAdd, addLabel = '+ Add', search, o
 // ─── Setup health banner ───────────────────────────────────────────────────────
 function SetupHealthBanner() {
   const { data } = useSetupHealth();
-  const health = data as { ready?: boolean; checks?: { label: string; ok: boolean }[] } | undefined;
+  const health = data as { completionPercent?: number; missing?: string[] } | undefined;
   if (!health) return null;
-  const checks = health.checks ?? [];
-  const passed = checks.filter((c) => c.ok).length;
-  const all = checks.length;
-  if (health.ready) {
+  const missing = health.missing ?? [];
+  const completion = Number(health.completionPercent ?? 0);
+  const isReady = missing.length === 0;
+  if (isReady) {
     return (
       <div className="flex items-center gap-2 rounded-lg border border-green-800/40 bg-green-950/20 px-4 py-2 text-xs text-green-300">
         <CheckCircle2 className="h-4 w-4 shrink-0" />
-        Foundation setup complete — {passed}/{all} checks passed. Intelligence modules can now run.
+        Foundation setup complete - 100% readiness. Intelligence modules can now run.
       </div>
     );
   }
@@ -456,11 +456,11 @@ function SetupHealthBanner() {
       <div className="flex items-start gap-2">
         <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />
         <div className="flex-1">
-          <p className="text-xs font-medium text-amber-300">{passed}/{all} setup checks passed — some intelligence modules may not work yet.</p>
+          <p className="text-xs font-medium text-amber-300">{completion}% setup complete - some intelligence modules may not work yet.</p>
           <div className="mt-2 flex flex-wrap gap-2">
-            {checks.map((c) => (
-              <span key={c.label} className={`flex items-center gap-1 text-xs ${c.ok ? 'text-green-400' : 'text-slate-500'}`}>
-                {c.ok ? '✓' : '○'} {c.label}
+            {missing.map((item) => (
+              <span key={item} className="flex items-center gap-1 text-xs text-slate-500">
+                ○ {item}
               </span>
             ))}
           </div>

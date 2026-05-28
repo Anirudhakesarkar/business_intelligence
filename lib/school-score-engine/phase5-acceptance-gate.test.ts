@@ -20,22 +20,22 @@ const MODULE_KEYS: ScoreModuleKey[] = [
 ];
 
 describe('Phase 5 acceptance gate', () => {
-  it('computes all 10 score components for a seeded day', () => {
+  it('computes all 10 score components for a seeded day', async () => {
     resetScoreEngineStore();
     const date = '2099-10-01';
-    seedDemoSchool(1);
-    seedSchoolDailySummariesPipeline(1, date);
+    await seedDemoSchool(1);
+    await seedSchoolDailySummariesPipeline(1, date);
     calculateScoresForDay(1, date);
     const rows = listModuleScores(1, date);
     assert.equal(rows.length, 10);
     for (const k of MODULE_KEYS) assert.ok(rows.some((r) => r.moduleKey === k), k);
   });
 
-  it('overall matches docx weight formula with default profile', () => {
+  it('overall matches docx weight formula with default profile', async () => {
     resetScoreEngineStore();
     const date = '2099-10-02';
-    seedDemoSchool(1);
-    seedSchoolDailySummariesPipeline(1, date);
+    await seedDemoSchool(1);
+    await seedSchoolDailySummariesPipeline(1, date);
     const { overall, modules } = calculateScoresForDay(1, date);
     const moduleMap = Object.fromEntries(modules.map((m) => [m.moduleKey, { score: m.score }])) as Record<ScoreModuleKey, { score: number }>;
     assert.equal(overall.overallScore, computeOverallScore(moduleMap, DEFAULT_WEIGHTS));
@@ -47,11 +47,11 @@ describe('Phase 5 acceptance gate', () => {
     assert.ok(mvp3 >= 0 && mvp3 <= 100);
   });
 
-  it('re-run is reproducible and weight profile does not rewrite history', () => {
+  it('re-run is reproducible and weight profile does not rewrite history', async () => {
     resetScoreEngineStore();
     const date = '2099-10-03';
-    seedDemoSchool(1);
-    seedSchoolDailySummariesPipeline(1, date);
+    await seedDemoSchool(1);
+    await seedSchoolDailySummariesPipeline(1, date);
     const a = calculateScoresForDay(1, date).overall.overallScore;
     assert.equal(calculateScoresForDay(1, date).overall.overallScore, a);
     createWeightProfile(1, '2099-10-04', { ...DEFAULT_WEIGHTS, teacher: 0.22 });
@@ -59,11 +59,11 @@ describe('Phase 5 acceptance gate', () => {
     assert.ok(listWeightProfiles(1).length >= 2);
   });
 
-  it('score layer stores numeric drivers only (no GPT narrative fields)', () => {
+  it('score layer stores numeric drivers only (no GPT narrative fields)', async () => {
     resetScoreEngineStore();
     const date = '2099-10-04';
-    seedDemoSchool(1);
-    seedSchoolDailySummariesPipeline(1, date);
+    await seedDemoSchool(1);
+    await seedSchoolDailySummariesPipeline(1, date);
     const { modules } = calculateScoresForDay(1, date);
     for (const m of modules) {
       assert.ok(typeof m.score === 'number');

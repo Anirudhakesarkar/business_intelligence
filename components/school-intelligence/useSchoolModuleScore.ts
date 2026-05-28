@@ -14,13 +14,16 @@ export function useSchoolModuleScore(
   const [delta, setDelta] = useState<number | null>(null);
   const [trend, setTrend] = useState<{ date: string; score: number }[]>([]);
   const [loading, setLoading] = useState(!!moduleKey);
+  const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!moduleKey) {
       setLoading(false);
+      setError(null);
       return;
     }
     setLoading(true);
+    setError(null);
     try {
       const [detailRes, trendRes] = await Promise.all([
         fetch(
@@ -30,13 +33,26 @@ export function useSchoolModuleScore(
           `/api/school-scores/modules/${moduleKey}/trend?organizationId=${organizationId}&date=${encodeURIComponent(date)}&days=7`
         ),
       ]);
-      const data = await detailRes.json();
-      setScore(data.score ?? null);
-      setDrivers(data.top_drivers ?? data.drivers ?? []);
-      setPriorScore(data.priorScore ?? null);
-      setDelta(data.trend_delta ?? null);
-      const trendData = await trendRes.json();
-      setTrend(trendData.points ?? []);
+      const detailJson = await detailRes.json();
+      if (!detailRes.ok) {
+        throw new Error(detailJson.error ?? 'Failed to load module score');
+      }
+      const trendJson = await trendRes.json();
+      if (!trendRes.ok) {
+        throw new Error(trendJson.error ?? 'Failed to load module trend');
+      }
+      setScore(detailJson.score ?? null);
+      setDrivers(detailJson.top_drivers ?? detailJson.drivers ?? []);
+      setPriorScore(detailJson.priorScore ?? null);
+      setDelta(detailJson.trend_delta ?? null);
+      setTrend(trendJson.points ?? []);
+    } catch (e) {
+      setScore(null);
+      setDrivers([]);
+      setPriorScore(null);
+      setDelta(null);
+      setTrend([]);
+      setError(e instanceof Error ? e.message : 'Failed to load module score');
     } finally {
       setLoading(false);
     }
@@ -46,5 +62,5 @@ export function useSchoolModuleScore(
     void load();
   }, [load]);
 
-  return { score, drivers, priorScore, delta, trend, loading, reload: load };
+  return { score, drivers, priorScore, delta, trend, loading, error, reload: load };
 }

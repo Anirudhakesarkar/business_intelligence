@@ -16,32 +16,32 @@ import {
 import { DEFAULT_WEIGHTS } from './weights';
 
 describe('school-score-engine APIs', () => {
-  it('calculates ten module scores and overall for seeded date', () => {
+  it('calculates ten module scores and overall for seeded date', async () => {
     resetScoreEngineStore();
     const date = '2099-07-10';
-    seedDemoSchool(1);
-    seedSchoolDailySummariesPipeline(1, date);
+    await seedDemoSchool(1);
+    await seedSchoolDailySummariesPipeline(1, date);
     const result = calculateScoresForDay(1, date);
     assert.equal(result.skipped, false);
     assert.ok(result.overall.overallScore >= 0);
     assert.equal(listModuleScores(1, date).length, 10);
   });
 
-  it('idempotent re-run produces same overall score', () => {
+  it('idempotent re-run produces same overall score', async () => {
     resetScoreEngineStore();
     const date = '2099-07-11';
-    seedDemoSchool(1);
-    seedSchoolDailySummariesPipeline(1, date);
+    await seedDemoSchool(1);
+    await seedSchoolDailySummariesPipeline(1, date);
     const a = calculateScoresForDay(1, date).overall.overallScore;
     const b = calculateScoresForDay(1, date).overall.overallScore;
     assert.equal(a, b);
   });
 
-  it('weight profile versioning does not rewrite past scores', () => {
+  it('weight profile versioning does not rewrite past scores', async () => {
     resetScoreEngineStore();
     const date = '2099-07-12';
-    seedDemoSchool(1);
-    seedSchoolDailySummariesPipeline(1, date);
+    await seedDemoSchool(1);
+    await seedSchoolDailySummariesPipeline(1, date);
     calculateScoresForDay(1, date);
     const before = getOverallScore(1, date)!.overallScore;
     createWeightProfile(1, '2099-07-13', { ...DEFAULT_WEIGHTS, teacher: 0.3 });
@@ -51,13 +51,13 @@ describe('school-score-engine APIs', () => {
     assert.ok(db.auditLog().some((e) => e.entityType === 'score_weight_profile'));
   });
 
-  it('overall trend and compare return historical points', () => {
+  it('overall trend and compare return historical points', async () => {
     resetScoreEngineStore();
     const date = '2099-07-15';
-    seedDemoSchool(1);
-    seedSchoolDailySummariesPipeline(1, date);
+    await seedDemoSchool(1);
+    await seedSchoolDailySummariesPipeline(1, date);
     calculateScoresForDay(1, date);
-    seedSchoolDailySummariesPipeline(1, '2099-07-14');
+    await seedSchoolDailySummariesPipeline(1, '2099-07-14');
     calculateScoresForDay(1, '2099-07-14');
     const trend = getOverallTrend(1, date, 3);
     assert.equal(trend.points.length, 3);

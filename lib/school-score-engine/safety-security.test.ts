@@ -18,8 +18,8 @@ describe('school-score-engine safety-security', () => {
     assert.ok(security?.description.includes('RestrictedZoneEntry'));
   });
 
-  it('computes safety score from fall and fire events', () => {
-    seedDemoSchool(1);
+  it('computes safety score from fall and fire events', async () => {
+    await seedDemoSchool(1);
     createEvent({
       organizationId: 1,
       eventType: 'FallDetected',
@@ -33,8 +33,8 @@ describe('school-score-engine safety-security', () => {
     assert.equal(score, 75);
   });
 
-  it('computes security score from restricted zone entries', () => {
-    seedDemoSchool(1);
+  it('computes security score from restricted zone entries', async () => {
+    await seedDemoSchool(1);
     createEvent({
       organizationId: 1,
       eventType: 'RestrictedZoneEntry',
@@ -48,9 +48,9 @@ describe('school-score-engine safety-security', () => {
     assert.equal(score, 82);
   });
 
-  it('overall score includes safety and security with docx weights', () => {
-    seedDemoSchool(1);
-    seedSchoolDailySummariesPipeline(1, date);
+  it('overall score includes safety and security with docx weights', async () => {
+    await seedDemoSchool(1);
+    await seedSchoolDailySummariesPipeline(1, date);
     const profile = getActiveWeightProfile(1, date);
     assert.equal(profile.weights.safety, DEFAULT_WEIGHTS.safety);
     assert.equal(profile.weights.security, DEFAULT_WEIGHTS.security);

@@ -1,7 +1,7 @@
 import type { SchoolClass, Section, StaffMember, Subject, Teacher } from '../types';
 import { orgIdFromPg, resolveOrgIdForPg } from '../../school-db/organization-id';
 import { db as memDb, logAudit, _ensureNextIdAbove } from '../store';
-import { dbQuery, num, requirePool } from './shared';
+import { dbQuery, isDbEnabled, num, requirePool } from './shared';
 
 // ─── Classes ─────────────────────────────────────────────────────────────────
 
@@ -40,6 +40,11 @@ async function getClassById(id: number): Promise<SchoolClass | null> {
 }
 
 export async function listClasses(organizationId?: number | string): Promise<SchoolClass[]> {
+  if (!isDbEnabled()) {
+    if (organizationId == null) return [...memDb.classes()];
+    const org = Number(organizationId);
+    return memDb.classes().filter((c) => c.organizationId === org);
+  }
   requirePool();
   const sql = organizationId
     ? `SELECT id, organization_id, name, sort_order, is_active FROM school_classes WHERE organization_id = $1 ORDER BY sort_order, id`
@@ -170,6 +175,10 @@ function mirrorSection(row: Section) {
 }
 
 export async function listSections(classId?: number): Promise<Section[]> {
+  if (!isDbEnabled()) {
+    if (classId == null) return [...memDb.sections()];
+    return memDb.sections().filter((s) => s.classId === classId);
+  }
   requirePool();
   const sql = classId
     ? `SELECT id, class_id, name, expected_student_count, is_active FROM school_sections WHERE class_id = $1 ORDER BY id`
@@ -321,6 +330,11 @@ async function getSubjectById(id: number): Promise<Subject | null> {
 }
 
 export async function listSubjects(organizationId?: number | string): Promise<Subject[]> {
+  if (!isDbEnabled()) {
+    if (organizationId == null) return [...memDb.subjects()];
+    const org = Number(organizationId);
+    return memDb.subjects().filter((s) => s.organizationId === org);
+  }
   requirePool();
   const sql = organizationId
     ? `SELECT id, organization_id, name, subject_code, is_active FROM school_subjects WHERE organization_id = $1 ORDER BY id`
@@ -459,6 +473,11 @@ async function getTeacherById(id: number): Promise<Teacher | null> {
 }
 
 export async function listTeachers(organizationId?: number | string): Promise<Teacher[]> {
+  if (!isDbEnabled()) {
+    if (organizationId == null) return [...memDb.teachers()];
+    const org = Number(organizationId);
+    return memDb.teachers().filter((t) => t.organizationId === org);
+  }
   requirePool();
   const sql = organizationId
     ? `SELECT id, organization_id, employee_code, name, email, phone, is_active FROM school_teachers WHERE organization_id = $1 ORDER BY id`
@@ -607,6 +626,11 @@ async function getStaffMemberById(id: number): Promise<StaffMember | null> {
 }
 
 export async function listStaffMembers(organizationId?: number | string): Promise<StaffMember[]> {
+  if (!isDbEnabled()) {
+    if (organizationId == null) return [...memDb.staff()];
+    const org = Number(organizationId);
+    return memDb.staff().filter((s) => s.organizationId === org);
+  }
   requirePool();
   const sql = organizationId
     ? `SELECT id, organization_id, employee_code, name, role, phone, is_active FROM school_staff_members WHERE organization_id = $1 ORDER BY id`

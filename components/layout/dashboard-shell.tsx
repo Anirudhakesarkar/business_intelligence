@@ -13,8 +13,13 @@ function useIsLg() {
     const mql = window.matchMedia(`(min-width: ${LG_BREAKPOINT}px)`);
     const update = () => setIsLg(mql.matches);
     update();
-    mql.addEventListener('change', update);
-    return () => mql.removeEventListener('change', update);
+    if (typeof mql.addEventListener === 'function') {
+      mql.addEventListener('change', update);
+      return () => mql.removeEventListener('change', update);
+    }
+    // Safari/Electron variants can still expose addListener/removeListener.
+    mql.addListener(update);
+    return () => mql.removeListener(update);
   }, []);
 
   return isLg;
