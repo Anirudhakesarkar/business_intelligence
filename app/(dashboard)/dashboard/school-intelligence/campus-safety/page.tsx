@@ -116,9 +116,27 @@ export default function CampusSafetyPage() {
   const loadHealth = useCallback(async () => {
     setHealthLoading(true);
     try {
-      const res = await fetch(`/api/school-ai-signals/health?organizationId=${ORG_ID}`);
-      const data = await res.json();
-      setCameraHealth(data.cameras ?? []);
+      const res = await fetch(`/api/camera-health?organizationId=${ORG_ID}`);
+      const grid = (await res.json()) as Array<{
+        camera: { id: number };
+        freshness: { stale: boolean };
+        latestHealth?: { healthStatus: string };
+      }>;
+      setCameraHealth(
+        (Array.isArray(grid) ? grid : []).map((row) => {
+          const ev = row.latestHealth?.healthStatus;
+          let currentStatus = 'Online';
+          if (ev === 'Tampered') currentStatus = 'Tampered';
+          else if (ev === 'Unstable') currentStatus = 'Unstable';
+          else if (ev === 'Maintenance') currentStatus = 'Maintenance';
+          else if (row.freshness.stale || ev === 'Offline') currentStatus = 'Offline';
+          return {
+            cameraId: row.camera.id,
+            currentStatus,
+            consecutiveOfflineMinutes: 0,
+          };
+        }),
+      );
     } finally {
       setHealthLoading(false);
     }

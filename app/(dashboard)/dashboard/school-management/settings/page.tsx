@@ -46,7 +46,7 @@ export default function Page() {
         setSettings(s);
       })
       .catch(() => setSettings(null));
-    void schoolFetch('/api/zones')
+    void schoolFetch('/api/zones?organizationId=1')
       .then((r) => r.json())
       .then((payload) => setZones(Array.isArray(payload) ? payload : []))
       .catch(() => setZones([]));

@@ -4,12 +4,7 @@ import { json, err } from '@/lib/school-gpt-copilot/json';
 import { createAction, createActionFromRecommendation, listActions } from '@/lib/school-gpt-copilot/store';
 import { dbQuery, isDbEnabled } from '@/lib/school-db/pool';
 
-export async function GET(req: NextRequest) {
-  const organizationId = Number(req.nextUrl.searchParams.get('organizationId') ?? 1);
-  const mem = listActions(organizationId);
-  if (mem.length > 0 || !isDbEnabled()) {
-    return json({ organizationId, actions: mem });
-  }
+async function listActionsFromPg(organizationId: number) {
   const r = await dbQuery<{
     id: number;
     organization_id: number;
@@ -28,7 +23,7 @@ export async function GET(req: NextRequest) {
      ORDER BY created_at DESC`,
     [organizationId]
   );
-  const actions = (r?.rows ?? []).map((row) => ({
+  return (r?.rows ?? []).map((row) => ({
     id: row.id,
     organizationId: row.organization_id,
     recommendationId: row.recommendation_id ?? undefined,
@@ -40,7 +35,15 @@ export async function GET(req: NextRequest) {
     completedAt: row.completed_at ?? undefined,
     createdAt: row.created_at,
   }));
-  return json({ organizationId, actions });
+}
+
+export async function GET(req: NextRequest) {
+  const organizationId = Number(req.nextUrl.searchParams.get('organizationId') ?? 1);
+  if (isDbEnabled()) {
+    const actions = await listActionsFromPg(organizationId);
+    return json({ organizationId, actions, source: 'postgres' as const });
+  }
+  return json({ organizationId, actions: listActions(organizationId), source: 'memory' as const });
 }
 
 export async function POST(req: NextRequest) {

@@ -17,6 +17,8 @@ export const SCHOOL_MIGRATION_FILES = [
   '073_school_runtime_snapshot.sql',
   '074_school_campuses_align.sql',
   '074_school_mgmt_cameras_align.sql',
+  '075_school_demo_entity_tags.sql',
+  '076_school_ai_signals_drop.sql',
 ] as const;
 
 export type MigrateResult = {

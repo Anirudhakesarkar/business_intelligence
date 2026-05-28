@@ -19,6 +19,7 @@ import {
   createTimetableEntry,
   createZone,
 } from './repos';
+import { clearDemoTagsForOrg, demoMetadata, tagCurrentFoundationAsDemo } from './demo-tags';
 import { getSetupHealth, patchComplianceConfig, resetStoreForSeed, syncSectionRoomMappingsFromTimetable } from './store';
 
 const PURPOSES: CameraPurpose[] = [
@@ -35,6 +36,90 @@ async function hasTable(tableName: string): Promise<boolean> {
     [tableName],
   );
   return Boolean(r?.rows?.[0]?.exists);
+}
+
+export type FoundationOrgCounts = Record<string, number>;
+
+/** Dry-run row counts for foundation data scoped to an organization (Postgres). */
+export async function countFoundationForOrg(organizationId: number): Promise<FoundationOrgCounts> {
+  if (!isDbEnabled()) return {};
+  const pgOrg = resolveOrgIdForPg(organizationId);
+  const siteTable = (await hasTable('school_sites')) ? 'school_sites' : (await hasTable('school_campuses')) ? 'school_campuses' : null;
+  const buildingSiteCol =
+    (await hasTable('school_buildings'))
+      ? (await hasTable('school_sites') ? 'site_id' : 'campus_id')
+      : null;
+
+  const counts: FoundationOrgCounts = {};
+  const countSql = async (label: string, sql: string, params: unknown[] = []) => {
+    const r = await dbQuery<{ count: string }>(sql, params);
+    counts[label] = Number(r?.rows[0]?.count ?? 0);
+  };
+
+  if (siteTable) {
+    await countSql('sites', `SELECT COUNT(*)::text AS count FROM ${siteTable} WHERE organization_id = $1`, [pgOrg]);
+  }
+  if (siteTable && buildingSiteCol) {
+    await countSql(
+      'buildings',
+      `SELECT COUNT(*)::text AS count FROM school_buildings b
+       JOIN ${siteTable} s ON s.id = b.${buildingSiteCol} WHERE s.organization_id = $1`,
+      [pgOrg],
+    );
+    await countSql(
+      'floors',
+      `SELECT COUNT(*)::text AS count FROM school_floors f
+       JOIN school_buildings b ON b.id = f.building_id
+       JOIN ${siteTable} s ON s.id = b.${buildingSiteCol} WHERE s.organization_id = $1`,
+      [pgOrg],
+    );
+    await countSql(
+      'zones',
+      `SELECT COUNT(*)::text AS count FROM school_zones z
+       JOIN school_floors f ON f.id = z.floor_id
+       JOIN school_buildings b ON b.id = f.building_id
+       JOIN ${siteTable} s ON s.id = b.${buildingSiteCol} WHERE s.organization_id = $1`,
+      [pgOrg],
+    );
+    await countSql(
+      'rooms',
+      `SELECT COUNT(*)::text AS count FROM school_rooms r
+       JOIN school_zones z ON z.id = r.zone_id
+       JOIN school_floors f ON f.id = z.floor_id
+       JOIN school_buildings b ON b.id = f.building_id
+       JOIN ${siteTable} s ON s.id = b.${buildingSiteCol} WHERE s.organization_id = $1`,
+      [pgOrg],
+    );
+  }
+
+  const orgTables: [string, string][] = [
+    ['cameras', 'school_mgmt_cameras'],
+    ['classes', 'school_classes'],
+    ['subjects', 'school_subjects'],
+    ['teachers', 'school_teachers'],
+    ['staff', 'school_staff_members'],
+    ['timetable', 'school_timetable_entries'],
+    ['rosters', 'school_staff_duty_rosters'],
+    ['calendar', 'school_calendars'],
+    ['timeWindows', 'school_time_windows'],
+  ];
+  for (const [label, table] of orgTables) {
+    if (await hasTable(table)) {
+      await countSql(label, `SELECT COUNT(*)::text AS count FROM ${table} WHERE organization_id = $1`, [pgOrg]);
+    }
+  }
+
+  if (await hasTable('school_sections') && await hasTable('school_classes')) {
+    await countSql(
+      'sections',
+      `SELECT COUNT(*)::text AS count FROM school_sections sec
+       JOIN school_classes c ON c.id = sec.class_id WHERE c.organization_id = $1`,
+      [pgOrg],
+    );
+  }
+
+  counts.total = Object.entries(counts).reduce((sum, [k, v]) => (k === 'total' ? sum : sum + v), 0);
+  return counts;
 }
 
 /** Remove all foundation master data for an org in Postgres (and in-memory cache). */
@@ -117,6 +202,7 @@ export async function clearFoundationForOrg(organizationId: number) {
   if (await hasTable('school_campuses')) {
     await dbQuery(`DELETE FROM school_campuses WHERE organization_id = $1`, [pgOrg]);
   }
+  await clearDemoTagsForOrg(organizationId);
   resetStoreForSeed();
 }
 
@@ -257,6 +343,7 @@ export async function seedDemoSchoolPg(organizationId = 1) {
       criticality: z.riskCategory === 'ServerRoom' || z.riskCategory === 'Gate' ? 'Critical' : 'High',
       zoneId: z.id,
       status: 'Active',
+      metadata: demoMetadata(),
     });
     camCount++;
   }
@@ -277,10 +364,11 @@ export async function seedDemoSchoolPg(organizationId = 1) {
       zoneId: zone?.id,
       roomId: room?.id,
       status: 'Active',
-      metadata:
+      metadata: demoMetadata(
         purpose === 'Classroom'
           ? { teachingZones: { boardPolygon: [[0, 0], [100, 0], [100, 40]], deskPolygon: [[0, 50], [100, 50]] } }
           : undefined,
+      ),
     });
     camCount++;
   }
@@ -367,6 +455,7 @@ export async function seedDemoSchoolPg(organizationId = 1) {
   });
 
   syncSectionRoomMappingsFromTimetable(organizationId);
+  await tagCurrentFoundationAsDemo(organizationId);
   await hydrateFoundationFromPg();
 
   const health = getSetupHealth(organizationId);

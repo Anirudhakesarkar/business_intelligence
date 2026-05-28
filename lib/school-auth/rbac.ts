@@ -64,7 +64,6 @@ export function requiredPermission(method: string, pathname: string): SchoolPerm
     '/api/school-db/migrate',
     '/api/school-management/seed',
     '/api/school-intelligence/bootstrap',
-    '/api/school-ai-signals/seed',
     '/api/school-rule-engine/seed',
     '/api/school-daily-summaries/seed',
     '/api/school-gpt/seed',

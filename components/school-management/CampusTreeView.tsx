@@ -16,6 +16,8 @@ import {
   LayoutGrid,
   Search,
   X,
+  GraduationCap,
+  Users,
 } from 'lucide-react';
 
 type Row = Record<string, unknown>;
@@ -322,6 +324,8 @@ function CampusExplorer({
   floors,
   zones,
   rooms,
+  sections,
+  sectionMappings,
   search,
 }: {
   sites: Row[];
@@ -329,6 +333,8 @@ function CampusExplorer({
   floors: Row[];
   zones: Row[];
   rooms: Row[];
+  sections: Row[];
+  sectionMappings: SectionMapping[];
   search: string;
 }) {
   const q = search.trim().toLowerCase();
@@ -338,24 +344,34 @@ function CampusExplorer({
   const [floorId, setFloorId] = useState<number | null>(null);
   const [zoneId, setZoneId] = useState<number | null>(null);
 
+  // Auto-select site when there's only one
   useEffect(() => {
     if (sites.length === 1 && siteId === null) {
       setSiteId(Number(sites[0].id));
     }
   }, [sites, siteId]);
 
+  // Auto-select building when site is selected and has only one building
+  useEffect(() => {
+    if (siteId == null) return;
+    const siteBuilds = buildings.filter((b) => Number(b.siteId) === siteId);
+    if (siteBuilds.length === 1 && buildingId === null) {
+      setBuildingId(Number(siteBuilds[0].id));
+    }
+  }, [siteId, buildings, buildingId]);
+
   const filteredSites = useMemo(() => {
     if (!q) return sites;
     return sites.filter((s) => {
       if (rowMatches(s, q)) return true;
-      const siteB = buildings.filter((b) => b.siteId === s.id);
+      const siteB = buildings.filter((b) => Number(b.siteId) === Number(s.id));
       return siteB.some((b) =>
         rowMatches(b, q) ||
-        floors.filter((f) => f.buildingId === b.id).some((f) =>
+        floors.filter((f) => Number(f.buildingId) === Number(b.id)).some((f) =>
           rowMatches(f, q) ||
-          zones.filter((z) => z.floorId === f.id).some((z) =>
+          zones.filter((z) => Number(z.floorId) === Number(f.id)).some((z) =>
             rowMatches(z, q) ||
-            rooms.filter((r) => r.zoneId === z.id).some((r) => rowMatches(r, q)),
+            rooms.filter((r) => Number(r.zoneId) === Number(z.id)).some((r) => rowMatches(r, q)),
           ),
         ),
       );
@@ -364,36 +380,36 @@ function CampusExplorer({
 
   const siteBuildings = useMemo(() => {
     if (siteId == null) return [];
-    let list = buildings.filter((b) => b.siteId === siteId);
-    if (q) list = list.filter((b) => rowMatches(b, q) || floors.some((f) => f.buildingId === b.id && rowMatches(f, q)));
+    let list = buildings.filter((b) => Number(b.siteId) === siteId);
+    if (q) list = list.filter((b) => rowMatches(b, q) || floors.some((f) => Number(f.buildingId) === Number(b.id) && rowMatches(f, q)));
     return list;
   }, [buildings, siteId, floors, q]);
 
   const buildingFloors = useMemo(() => {
     if (buildingId == null) return [];
-    let list = floors.filter((f) => f.buildingId === buildingId).sort((a, b) => Number(a.levelNo) - Number(b.levelNo));
-    if (q) list = list.filter((f) => rowMatches(f, q) || zones.some((z) => z.floorId === f.id && rowMatches(z, q)));
+    let list = floors.filter((f) => Number(f.buildingId) === buildingId).sort((a, b) => Number(a.levelNo) - Number(b.levelNo));
+    if (q) list = list.filter((f) => rowMatches(f, q) || zones.some((z) => Number(z.floorId) === Number(f.id) && rowMatches(z, q)));
     return list;
   }, [floors, buildingId, zones, q]);
 
   const floorZones = useMemo(() => {
     if (floorId == null) return [];
-    let list = zones.filter((z) => z.floorId === floorId);
-    if (q) list = list.filter((z) => rowMatches(z, q) || rooms.some((r) => r.zoneId === z.id && rowMatches(r, q)));
+    let list = zones.filter((z) => Number(z.floorId) === floorId);
+    if (q) list = list.filter((z) => rowMatches(z, q) || rooms.some((r) => Number(r.zoneId) === Number(z.id) && rowMatches(r, q)));
     return list;
   }, [zones, floorId, rooms, q]);
 
   const zoneRooms = useMemo(() => {
     if (zoneId == null) return [];
-    let list = rooms.filter((r) => r.zoneId === zoneId);
+    let list = rooms.filter((r) => Number(r.zoneId) === zoneId);
     if (q) list = list.filter((r) => rowMatches(r, q));
     return list;
   }, [rooms, zoneId, q]);
 
   const selectedSite = sites.find((s) => s.id === siteId);
-  const selectedBuilding = buildings.find((b) => b.id === buildingId);
-  const selectedFloor = floors.find((f) => f.id === floorId);
-  const selectedZone = zones.find((z) => z.id === zoneId);
+  const selectedBuilding = buildings.find((b) => Number(b.id) === buildingId);
+  const selectedFloor = floors.find((f) => Number(f.id) === floorId);
+  const selectedZone = zones.find((z) => Number(z.id) === zoneId);
 
   const crumbs = useMemo(() => {
     const c: { label: string; level: 'site' | 'building' | 'floor' | 'zone' }[] = [];
@@ -438,7 +454,7 @@ function CampusExplorer({
                 key={String(site.id)}
                 label={String(site.name)}
                 sublabel={site.address ? String(site.address) : undefined}
-                selected={siteId === site.id}
+                selected={siteId === Number(site.id)}
                 highlight={itemHighlight(String(site.name))}
                 icon={School}
                 iconClass="bg-emerald-500/20 text-emerald-400"
@@ -464,7 +480,7 @@ function CampusExplorer({
                   key={String(bld.id)}
                   label={String(bld.name)}
                   sublabel={`${floors.filter((f) => f.buildingId === bld.id).length} floor(s)`}
-                  selected={buildingId === bld.id}
+                  selected={buildingId === Number(bld.id)}
                   highlight={itemHighlight(String(bld.name))}
                   icon={Building2}
                   iconClass="bg-blue-500/20 text-blue-400"
@@ -486,13 +502,13 @@ function CampusExplorer({
           >
             {buildingFloors.map((flr) => {
                 const zc = zones.filter((z) => z.floorId === flr.id).length;
-                const rc = rooms.filter((r) => zones.some((z) => z.floorId === flr.id && z.id === r.zoneId)).length;
+                const rc = rooms.filter((r) => zones.some((z) => Number(z.floorId) === Number(flr.id) && Number(z.id) === Number(r.zoneId))).length;
                 return (
                   <ExplorerItem
                     key={String(flr.id)}
                     label={String(flr.name)}
                     sublabel={`Level ${flr.levelNo} · ${zc} zones · ${rc} rooms`}
-                    selected={floorId === flr.id}
+                    selected={floorId === Number(flr.id)}
                     highlight={itemHighlight(String(flr.name))}
                     icon={Layers}
                     iconClass="bg-indigo-500/20 text-indigo-400"
@@ -520,7 +536,7 @@ function CampusExplorer({
                     key={String(zone.id)}
                     label={String(zone.name)}
                     sublabel={`${zt}${zone.isRiskZone ? ' · risk' : ''} · ${rc} room(s)`}
-                    selected={zoneId === zone.id}
+                    selected={zoneId === Number(zone.id)}
                     highlight={itemHighlight(String(zone.name))}
                     icon={MapPin}
                     iconClass="bg-violet-500/20 text-violet-400"
@@ -557,16 +573,27 @@ function CampusExplorer({
                     </div>
                   </div>
                 )}
-                {zoneRooms.map((room) => (
-                  <RoomChip
-                    key={String(room.id)}
-                    code={String(room.roomCode)}
-                    name={String(room.roomName)}
-                    capacity={String(room.capacity)}
-                    inactive={room.isActive === false}
-                    compact
-                  />
-                ))}
+                {zoneRooms.map((room) => {
+                  const m = sectionMappings.find((x) => x.roomId === Number(room.id));
+                  const sec = m ? sections.find((s) => Number(s.id) === m.sectionId) : null;
+                  return (
+                    <div key={String(room.id)}>
+                      <RoomChip
+                        code={String(room.roomCode)}
+                        name={String(room.roomName)}
+                        capacity={String(room.capacity)}
+                        inactive={room.isActive === false}
+                        compact
+                      />
+                      {sec && (
+                        <div className="mt-0.5 ml-1 flex items-center gap-1">
+                          <Users className="h-2.5 w-2.5 text-amber-400/70" />
+                          <span className="text-[10px] text-amber-300/80">{String(sec.name)}</span>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             )}
           </ExplorerColumn>
@@ -674,6 +701,8 @@ function CampusOutline({
   floors,
   zones,
   rooms,
+  sections,
+  sectionMappings,
   search,
 }: {
   sites: Row[];
@@ -681,6 +710,8 @@ function CampusOutline({
   floors: Row[];
   zones: Row[];
   rooms: Row[];
+  sections: Row[];
+  sectionMappings: SectionMapping[];
   search: string;
 }) {
   const q = search.trim().toLowerCase();
@@ -693,7 +724,7 @@ function CampusOutline({
     for (const site of sites) {
       const sk = `site-${site.id}`;
       let siteHit = rowMatches(site, q);
-      for (const bld of buildings.filter((b) => b.siteId === site.id)) {
+      for (const bld of buildings.filter((b) => Number(b.siteId) === Number(site.id))) {
         const bk = `bld-${bld.id}`;
         let bHit = rowMatches(bld, q);
         for (const flr of floors.filter((f) => f.buildingId === bld.id)) {
@@ -734,7 +765,7 @@ function CampusOutline({
     const keys: string[] = [];
     for (const site of sites) {
       keys.push(`site-${site.id}`);
-      for (const bld of buildings.filter((b) => b.siteId === site.id)) {
+      for (const bld of buildings.filter((b) => Number(b.siteId) === Number(site.id))) {
         keys.push(`bld-${bld.id}`);
         for (const flr of floors.filter((f) => f.buildingId === bld.id)) {
           keys.push(`flr-${flr.id}`);
@@ -784,7 +815,7 @@ function CampusOutline({
       {sites.map((site) => {
         const siteKey = `site-${site.id}`;
         if (!isVisible(siteKey)) return null;
-        const siteBuildings = buildings.filter((b) => b.siteId === site.id);
+        const siteBuildings = buildings.filter((b) => Number(b.siteId) === Number(site.id));
         return (
           <div key={siteKey} className="mb-6 last:mb-0">
             <TreeNode
@@ -825,7 +856,7 @@ function CampusOutline({
                       const flrKey = `flr-${flr.id}`;
                       if (!isVisible(flrKey)) return null;
                       const flrZones = zones.filter((z) => z.floorId === flr.id);
-                      const flrRooms = rooms.filter((r) => flrZones.some((z) => z.id === r.zoneId));
+                      const flrRooms = rooms.filter((r) => flrZones.some((z) => Number(z.id) === Number(r.zoneId)));
                       return (
                         <TreeNode
                           key={flrKey}
@@ -883,15 +914,26 @@ function CampusOutline({
                               >
                                 {zoneRooms.length > 0 && (
                                   <div className="flex flex-wrap gap-1.5 pb-2 pt-0.5">
-                                    {zoneRooms.map((room) => (
-                                      <RoomChip
-                                        key={String(room.id)}
-                                        code={String(room.roomCode)}
-                                        name={String(room.roomName)}
-                                        capacity={String(room.capacity)}
-                                        inactive={room.isActive === false}
-                                      />
-                                    ))}
+                                    {zoneRooms.map((room) => {
+                                      const m = sectionMappings.find((x) => x.roomId === Number(room.id));
+                                      const sec = m ? sections.find((s) => Number(s.id) === m.sectionId) : null;
+                                      return (
+                                        <div key={String(room.id)} className="flex flex-col gap-0.5">
+                                          <RoomChip
+                                            code={String(room.roomCode)}
+                                            name={String(room.roomName)}
+                                            capacity={String(room.capacity)}
+                                            inactive={room.isActive === false}
+                                          />
+                                          {sec && (
+                                            <div className="flex items-center gap-1 pl-1">
+                                              <Users className="h-2.5 w-2.5 text-amber-400/70" />
+                                              <span className="text-[10px] text-amber-300/80">{String(sec.name)}</span>
+                                            </div>
+                                          )}
+                                        </div>
+                                      );
+                                    })}
                                   </div>
                                 )}
                               </TreeNode>
@@ -915,6 +957,110 @@ function CampusOutline({
   );
 }
 
+// ─── Assignments panel ──────────────────────────────────────────────────────
+
+type SectionMapping = { sectionId: number; roomId: number; isPrimary?: boolean };
+
+function AssignmentsPanel({
+  classes,
+  sections,
+  sectionMappings,
+  rooms,
+}: {
+  classes: Row[];
+  sections: Row[];
+  sectionMappings: SectionMapping[];
+  rooms: Row[];
+}) {
+  const [open, setOpen] = useState(false);
+
+  const mappedCount = sectionMappings.length;
+  const totalSections = sections.length;
+
+  if (!classes.length && !sections.length) return null;
+
+  return (
+    <div className="rounded-xl border border-slate-800 bg-slate-900/50">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center justify-between px-4 py-3 text-left"
+      >
+        <div className="flex items-center gap-2">
+          <GraduationCap className="h-4 w-4 text-amber-400" />
+          <span className="text-sm font-medium text-slate-200">Academic Assignments</span>
+          <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold text-amber-400">
+            {mappedCount}/{totalSections} sections assigned
+          </span>
+        </div>
+        {open ? (
+          <ChevronDown className="h-4 w-4 text-slate-500" />
+        ) : (
+          <ChevronRight className="h-4 w-4 text-slate-500" />
+        )}
+      </button>
+
+      {open && (
+        <div className="border-t border-slate-800 px-4 pb-4 pt-3">
+          {classes.length === 0 ? (
+            <p className="text-xs text-slate-500">No classes found. Add classes in the Classes & Sections tab.</p>
+          ) : (
+            <div className="space-y-3">
+              {classes.map((cls) => {
+                const clsSections = sections.filter((s) => Number(s.classId) === Number(cls.id));
+                return (
+                  <div key={String(cls.id)}>
+                    <div className="mb-1.5 flex items-center gap-2">
+                      <GraduationCap className="h-3.5 w-3.5 shrink-0 text-amber-400" />
+                      <span className="text-xs font-semibold text-slate-200">{String(cls.name)}</span>
+                      <span className="text-[10px] text-slate-500">{clsSections.length} section{clsSections.length !== 1 ? 's' : ''}</span>
+                    </div>
+                    {clsSections.length === 0 ? (
+                      <p className="ml-5 text-[11px] text-slate-600">No sections</p>
+                    ) : (
+                      <div className="ml-5 flex flex-wrap gap-1.5">
+                        {clsSections.map((sec) => {
+                          const mapping = sectionMappings.find((m) => m.sectionId === Number(sec.id));
+                          const room = mapping ? rooms.find((r) => Number(r.id) === mapping.roomId) : null;
+                          return (
+                            <div
+                              key={String(sec.id)}
+                              className={`flex items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] ${
+                                room
+                                  ? 'border-cyan-500/30 bg-cyan-500/5 text-slate-300'
+                                  : 'border-slate-700/60 bg-slate-800/40 text-slate-500'
+                              }`}
+                            >
+                              <Users className="h-3 w-3 shrink-0 text-slate-500" />
+                              <span className="font-medium">{String(sec.name)}</span>
+                              {room ? (
+                                <span className="flex items-center gap-1">
+                                  <ChevronRight className="h-2.5 w-2.5 text-slate-600" />
+                                  <DoorOpen className="h-2.5 w-2.5 text-cyan-400" />
+                                  <span className="font-mono text-[10px] text-cyan-300">
+                                    {String(room.roomCode)}
+                                  </span>
+                                  <span className="text-slate-400">{String(room.roomName)}</span>
+                                </span>
+                              ) : (
+                                <span className="text-[10px] text-slate-600">unassigned</span>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Main export ─────────────────────────────────────────────────────────────
 
 export function CampusTreeView({
@@ -923,12 +1069,18 @@ export function CampusTreeView({
   floors,
   zones,
   rooms,
+  classes = [],
+  sections = [],
+  sectionMappings = [],
 }: {
   sites: Row[];
   buildings: Row[];
   floors: Row[];
   zones: Row[];
   rooms: Row[];
+  classes?: Row[];
+  sections?: Row[];
+  sectionMappings?: SectionMapping[];
 }) {
   const [viewMode, setViewMode] = useState<ViewMode>('explorer');
   const [search, setSearch] = useState('');
@@ -952,8 +1104,7 @@ export function CampusTreeView({
         </div>
         <p className="text-sm font-medium text-slate-300">No campus data yet</p>
         <p className="mt-1 max-w-sm text-xs text-slate-500">
-          Add sites, buildings, and rooms in the other tabs, or use &quot;Seed demo data&quot; to populate a sample
-          hierarchy.
+          Add sites, buildings, floors, zones, and rooms using the tabs above to build your campus hierarchy.
         </p>
       </div>
     );
@@ -967,9 +1118,18 @@ export function CampusTreeView({
         <StatCard icon={Layers} label="Floors" value={floors.length} accent="bg-indigo-500/15 text-indigo-400" />
         <StatCard icon={MapPin} label="Zones" value={zones.length} accent="bg-violet-500/15 text-violet-400" />
         <StatCard icon={DoorOpen} label="Rooms" value={rooms.length} accent="bg-cyan-500/15 text-cyan-400" />
+        {classes.length > 0 && <StatCard icon={GraduationCap} label="Classes" value={classes.length} accent="bg-amber-500/15 text-amber-400" />}
+        {sections.length > 0 && <StatCard icon={Users} label="Sections" value={sections.length} accent="bg-orange-500/15 text-orange-400" />}
       </div>
 
       <HierarchyPipeline counts={counts} />
+
+      <AssignmentsPanel
+        classes={classes}
+        sections={sections}
+        sectionMappings={sectionMappings}
+        rooms={rooms}
+      />
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <ViewToggle mode={viewMode} onChange={setViewMode} />
@@ -1002,6 +1162,8 @@ export function CampusTreeView({
           floors={floors}
           zones={zones}
           rooms={rooms}
+          sections={sections}
+          sectionMappings={sectionMappings}
           search={search}
         />
       ) : (
@@ -1011,6 +1173,8 @@ export function CampusTreeView({
           floors={floors}
           zones={zones}
           rooms={rooms}
+          sections={sections}
+          sectionMappings={sectionMappings}
           search={search}
         />
       )}

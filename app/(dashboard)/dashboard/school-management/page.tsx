@@ -3,8 +3,18 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { SMPageHeader } from '@/components/school-management/SMPageHeader';
-import { SetupProgressBar } from '@/components/school-management/SetupProgressBar';
-import { useMissingData, useSeedDemo, useSetupHealth } from '@/components/school-management/useSchoolFoundation';
+import { useMissingData, useSetupHealth } from '@/components/school-management/useSchoolFoundation';
+
+const BASE = '/dashboard/school-management';
+
+function missingItemHref(msg: string): string | null {
+  if (msg.includes('camera')) return `${BASE}/cameras`;
+  if (msg.includes('timetable')) return `${BASE}/timetable`;
+  if (msg.includes('duty roster') || msg.includes('roster')) return `${BASE}/staff-duty`;
+  if (msg.includes('calendar')) return `${BASE}/calendar`;
+  if (msg.includes('room') || msg.includes('capacity') || msg.includes('section')) return `${BASE}/master-data`;
+  return null;
+}
 
 const LINKS = [
   { href: '/dashboard/school-management/master-data', label: 'Master Data' },
@@ -17,7 +27,6 @@ const LINKS = [
 export default function SchoolManagementOverviewPage() {
   const { data, isLoading, refetch } = useSetupHealth();
   const { data: missingData } = useMissingData();
-  const seed = useSeedDemo();
   const health = data ?? {
     completionPercent: 0,
     camerasMapped: { complete: 0, total: 0 },
@@ -25,7 +34,7 @@ export default function SchoolManagementOverviewPage() {
     timetableEntries: 0,
     rosterEntries: 0,
     calendarDays: 0,
-    missing: ['Load demo seed to begin'],
+    missing: ['Add foundation data in Master Data to begin'],
     isReadyForPhase2: false,
     nextAction: { label: 'Register cameras', href: '/dashboard/school-management/cameras', reason: 'Start foundation setup.' },
     calendarSummary: { totalDays: 0, workingDays: 0, holidays: 0, examDays: 0, eventDays: 0, halfDays: 0, specialDays: 0 },
@@ -34,18 +43,16 @@ export default function SchoolManagementOverviewPage() {
   const next = health.nextAction;
 
   return (
-    <div className="space-y-6">
+    <>
       <SMPageHeader
         title="School Management"
         subtitle="Foundation setup: campus hierarchy, cameras, timetable, calendar, and duty roster."
         action={
           <div className="flex gap-2">
             <Button size="sm" variant="outline" onClick={() => refetch()}>Refresh</Button>
-            <Button size="sm" onClick={() => seed.mutate()} disabled={seed.isPending}>Load demo seed</Button>
           </div>
         }
       />
-      <SetupProgressBar percent={health.completionPercent ?? 0} />
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
         {[
           ['Cameras mapped', `${health.camerasMapped?.complete ?? 0}/${health.camerasMapped?.total ?? 0}`],
@@ -83,10 +90,29 @@ export default function SchoolManagementOverviewPage() {
       {health.missing?.length > 0 && (
         <Card className="border-amber-500/30 bg-amber-500/5">
           <CardHeader><CardTitle className="text-sm text-amber-400">Missing setup items</CardTitle></CardHeader>
-          <CardContent>
-            <ul className="list-inside list-disc text-sm text-slate-300">{health.missing.map((m: string) => <li key={m}>{m}</li>)}</ul>
+          <CardContent className="space-y-1">
+            {health.missing.map((m: string, i: number) => {
+              const href = missingItemHref(m);
+              return (
+                <div key={`missing-${i}-${m}`} className="flex items-center gap-2 text-sm text-slate-300">
+                  <span className="text-amber-400">•</span>
+                  {href ? (
+                    <Link href={href} className="hover:underline text-amber-200 hover:text-amber-100">
+                      {m} <span className="text-amber-400/70">→</span>
+                    </Link>
+                  ) : (
+                    <span>{m}</span>
+                  )}
+                </div>
+              );
+            })}
             {(missingData?.unmappedCameras?.length ?? 0) > 0 && (
-              <p className="mt-2 text-xs text-amber-300/80">Unmapped cameras: {missingData.unmappedCameras.join(', ')}</p>
+              <p className="mt-2 text-xs text-amber-300/80">
+                Unmapped cameras:{' '}
+                <Link href="/dashboard/school-management/cameras" className="underline hover:text-amber-200">
+                  {missingData.unmappedCameras.join(', ')} — fix mapping →
+                </Link>
+              </p>
             )}
           </CardContent>
         </Card>
@@ -98,6 +124,6 @@ export default function SchoolManagementOverviewPage() {
         ))}
       </div>
       {isLoading && <p className="text-xs text-slate-500">Loading setup health…</p>}
-    </div>
+    </>
   );
 }

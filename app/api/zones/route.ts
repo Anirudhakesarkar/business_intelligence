@@ -1,14 +1,17 @@
 import '@/lib/school-persistence/init';
 import { NextRequest } from 'next/server';
 import { json, err } from '@/lib/school-foundation/json';
-import { createZone, listZones, DbDisabledError } from '@/lib/school-foundation/repos';
+import { createZone, listZones, listZonesForOrganization, DbDisabledError } from '@/lib/school-foundation/repos';
 import { ensureFoundationHydrated } from '@/lib/school-db/hydrate';
 
 export async function GET(req: NextRequest) {
   await ensureFoundationHydrated();
   try {
+    const organizationId = req.nextUrl.searchParams.get('organizationId');
     const floorId = req.nextUrl.searchParams.get('floorId');
-    const rows = await listZones(floorId ? Number(floorId) : undefined);
+    const rows = organizationId
+      ? await listZonesForOrganization(Number(organizationId))
+      : await listZones(floorId ? Number(floorId) : undefined);
     return json(rows);
   } catch (e) {
     if (e instanceof DbDisabledError) return err(e.message, 503);

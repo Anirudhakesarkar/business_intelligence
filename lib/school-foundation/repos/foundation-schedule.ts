@@ -1,7 +1,7 @@
 import type { CalendarDay, DayType, DutyRoster, TimeWindow, TimetableEntry } from '../types';
 import { orgIdFromPg, resolveOrgIdForPg } from '../../school-db/organization-id';
-import { db as memDb, logAudit, _ensureNextIdAbove } from '../store';
-import { dbQuery, isDbEnabled, num, requirePool } from './shared';
+import { db as memDb, logAudit, patchTimetableEntry as patchTimetableEntryMem, _ensureNextIdAbove } from '../store';
+import { dbQuery, isDbEnabled, num, requirePool, withDbTransaction, type DbQueryFn } from './shared';
 
 function timeToStr(t: string | Date | null): string {
   if (!t) return '';
@@ -93,6 +93,125 @@ export async function createCalendarDay(input: Omit<CalendarDay, 'id'>): Promise
 export async function hydrateCalendarFromPg(): Promise<{ hydrated: number }> {
   const rows = await listCalendarDays();
   return { hydrated: rows.length };
+}
+
+export async function getCalendarDayById(id: number): Promise<CalendarDay | null> {
+  if (!isDbEnabled()) {
+    return memDb.calendar().find((c) => c.id === id) ?? null;
+  }
+  requirePool();
+  const r = await dbQuery<CalendarRow>(
+    `SELECT id, organization_id, calendar_date, day_type, label, timing_override FROM school_calendars WHERE id = $1`,
+    [id],
+  );
+  const row = r?.rows[0];
+  if (!row) return null;
+  const day = calendarFromRow(row);
+  mirrorCalendar(day);
+  return day;
+}
+
+export type PatchCalendarInput = Partial<Pick<CalendarDay, 'dayType' | 'label' | 'timingOverride' | 'calendarDate'>>;
+
+export async function patchCalendarDay(id: number, patch: PatchCalendarInput): Promise<CalendarDay> {
+  requirePool();
+  const existing = await getCalendarDayById(id);
+  if (!existing) throw new Error('Calendar day not found');
+  const merged: CalendarDay = {
+    ...existing,
+    ...patch,
+    calendarDate: patch.calendarDate ?? existing.calendarDate,
+    dayType: patch.dayType ?? existing.dayType,
+    label: patch.label !== undefined ? patch.label : existing.label,
+    timingOverride: patch.timingOverride !== undefined ? patch.timingOverride : existing.timingOverride,
+  };
+  const r = await dbQuery<CalendarRow>(
+    `UPDATE school_calendars SET calendar_date = $1, day_type = $2, label = $3, timing_override = $4::jsonb
+     WHERE id = $5
+     RETURNING id, organization_id, calendar_date, day_type, label, timing_override`,
+    [
+      merged.calendarDate,
+      merged.dayType,
+      merged.label ?? null,
+      JSON.stringify(merged.timingOverride ?? null),
+      id,
+    ],
+  );
+  if (!r?.rows[0]) throw new Error('Calendar day not found');
+  const row = calendarFromRow(r.rows[0]);
+  mirrorCalendar(row);
+  logAudit('update', 'school_calendar', id, row);
+  return row;
+}
+
+export async function deleteCalendarDay(id: number): Promise<{ ok: true }> {
+  requirePool();
+  const before = await getCalendarDayById(id);
+  if (!before) throw new Error('Calendar day not found');
+  await dbQuery(`DELETE FROM school_calendars WHERE id = $1`, [id]);
+  const arr = memDb.calendar();
+  const i = arr.findIndex((c) => c.id === id);
+  if (i >= 0) arr.splice(i, 1);
+  logAudit('delete', 'school_calendar', id, undefined, before);
+  return { ok: true };
+}
+
+async function upsertCalendarDayTx(query: DbQueryFn, input: Omit<CalendarDay, 'id'>): Promise<CalendarDay> {
+  const pgOrg = resolveOrgIdForPg(input.organizationId);
+  const existing = await query<CalendarRow>(
+    `SELECT id, organization_id, calendar_date, day_type, label, timing_override
+     FROM school_calendars WHERE organization_id = $1 AND calendar_date = $2`,
+    [pgOrg, input.calendarDate],
+  );
+  if (existing?.rows[0]) {
+    const r = await query<CalendarRow>(
+      `UPDATE school_calendars SET day_type = $1, label = $2, timing_override = $3::jsonb
+       WHERE id = $4
+       RETURNING id, organization_id, calendar_date, day_type, label, timing_override`,
+      [
+        input.dayType,
+        input.label ?? null,
+        JSON.stringify(input.timingOverride ?? null),
+        existing.rows[0].id,
+      ],
+    );
+    if (!r?.rows[0]) throw new Error('Failed to update calendar day');
+    return calendarFromRow(r.rows[0]);
+  }
+  const r = await query<CalendarRow>(
+    `INSERT INTO school_calendars (organization_id, calendar_date, day_type, label, timing_override)
+     VALUES ($1, $2, $3, $4, $5::jsonb)
+     RETURNING id, organization_id, calendar_date, day_type, label, timing_override`,
+    [pgOrg, input.calendarDate, input.dayType, input.label ?? null, JSON.stringify(input.timingOverride ?? null)],
+  );
+  if (!r?.rows[0]) throw new Error('Failed to create calendar day');
+  return calendarFromRow(r.rows[0]);
+}
+
+/** Upsert many calendar days in one Postgres transaction. */
+export async function commitCalendarBulk(
+  days: Omit<CalendarDay, 'id'>[],
+): Promise<{ count: number; days: CalendarDay[] }> {
+  if (!days.length) return { count: 0, days: [] };
+  if (!isDbEnabled()) {
+    const created: CalendarDay[] = [];
+    for (const input of days) {
+      created.push(await createCalendarDay(input));
+    }
+    return { count: created.length, days: created };
+  }
+  const organizationId = days[0].organizationId;
+  const rows = await withDbTransaction(async (query) => {
+    const out: CalendarDay[] = [];
+    for (const input of days) {
+      const row = await upsertCalendarDayTx(query, input);
+      out.push(row);
+    }
+    return out;
+  });
+  for (const row of rows) mirrorCalendar(row);
+  await listCalendarDays(organizationId);
+  return { count: rows.length, days: rows };
 }
 
 // ─── Time windows ────────────────────────────────────────────────────────────
@@ -284,6 +403,59 @@ export async function clearTimetableForOrg(organizationId: number): Promise<{ de
   return { deleted };
 }
 
+export type PatchTimetableInput = Partial<
+  Pick<TimetableEntry, 'sectionId' | 'subjectId' | 'roomId' | 'teacherId' | 'periodType' | 'dayOfWeek' | 'startTime' | 'endTime'>
+>;
+
+export async function patchTimetableEntry(id: number, patch: PatchTimetableInput): Promise<TimetableEntry> {
+  if (!isDbEnabled()) return patchTimetableEntryMem(id, patch);
+  requirePool();
+  const existing = memDb.timetable().find((t) => t.id === id);
+  if (!existing) {
+    await listTimetableEntries();
+    if (!memDb.timetable().find((t) => t.id === id)) throw new Error('Not found');
+  }
+  const definedPatch = Object.fromEntries(
+    Object.entries(patch).filter(([, v]) => v !== undefined),
+  ) as PatchTimetableInput;
+  const merged = { ...memDb.timetable().find((t) => t.id === id)!, ...definedPatch };
+  if (merged.endTime <= merged.startTime) throw new Error('End time must be after start time.');
+  const active = memDb.timetable().filter((t) => t.isActive && t.organizationId === merged.organizationId);
+  const roomConflict = active.some(
+    (t) =>
+      t.id !== id &&
+      t.roomId === merged.roomId &&
+      t.dayOfWeek === merged.dayOfWeek &&
+      periodsOverlap(t.startTime, t.endTime, merged.startTime, merged.endTime),
+  );
+  if (roomConflict) throw new Error('Room has overlapping timetable period.');
+  const r = await dbQuery<TimetableRow>(
+    `UPDATE school_timetable_entries SET
+       section_id = $1, subject_id = $2, room_id = $3, teacher_id = $4, period_type = $5,
+       day_of_week = $6, start_time = $7, end_time = $8
+     WHERE id = $9 AND is_active = TRUE
+     RETURNING id, organization_id, section_id, subject_id, room_id, teacher_id, period_type, day_of_week, start_time, end_time, is_active`,
+    [
+      merged.sectionId,
+      merged.subjectId ?? null,
+      merged.roomId,
+      merged.teacherId ?? null,
+      merged.periodType,
+      merged.dayOfWeek,
+      merged.startTime,
+      merged.endTime,
+      id,
+    ],
+  );
+  if (!r?.rows[0]) throw new Error('Not found');
+  const row = timetableFromRow(r.rows[0]);
+  const arr = memDb.timetable();
+  const i = arr.findIndex((t) => t.id === id);
+  if (i >= 0) arr[i] = row;
+  logAudit('update', 'timetable', id, row);
+  return row;
+}
+
 export async function deactivateTimetableEntry(id: number): Promise<TimetableEntry> {
   requirePool();
   const r = await dbQuery<TimetableRow>(
@@ -382,6 +554,74 @@ export async function createDutyRoster(input: Omit<DutyRoster, 'id' | 'isActive'
   const row = rosterFromRow(r.rows[0]);
   mirrorRoster(row);
   logAudit('create', 'duty_roster', row.id, row);
+  return row;
+}
+
+export async function getDutyRoster(id: number): Promise<DutyRoster> {
+  if (!isDbEnabled()) {
+    const row = memDb.rosters().find((r) => r.id === id);
+    if (!row) throw new Error('Not found');
+    return row;
+  }
+  requirePool();
+  const r = await dbQuery<RosterRow>(
+    `SELECT id, organization_id, staff_member_id, zone_id, duty_type, day_of_week, start_time, end_time, is_critical_window, is_active
+     FROM school_staff_duty_rosters WHERE id = $1`,
+    [id],
+  );
+  if (!r?.rows[0]) throw new Error('Not found');
+  const row = rosterFromRow(r.rows[0]);
+  const arr = memDb.rosters();
+  const i = arr.findIndex((x) => x.id === id);
+  if (i >= 0) arr[i] = row;
+  else mirrorRoster(row);
+  return row;
+}
+
+export async function patchDutyRoster(id: number, patch: Partial<Omit<DutyRoster, 'id'>>): Promise<DutyRoster> {
+  requirePool();
+  const existing = await getDutyRoster(id);
+  const merged: DutyRoster = { ...existing, ...patch, id };
+  if (merged.endTime <= merged.startTime) throw new Error('End time must be after start time.');
+  const r = await dbQuery<RosterRow>(
+    `UPDATE school_staff_duty_rosters SET
+       staff_member_id = $1, zone_id = $2, duty_type = $3, day_of_week = $4,
+       start_time = $5, end_time = $6, is_critical_window = $7
+     WHERE id = $8
+     RETURNING id, organization_id, staff_member_id, zone_id, duty_type, day_of_week, start_time, end_time, is_critical_window, is_active`,
+    [
+      merged.staffMemberId,
+      merged.zoneId ?? null,
+      merged.dutyType,
+      merged.dayOfWeek,
+      merged.startTime,
+      merged.endTime,
+      merged.isCriticalWindow,
+      id,
+    ],
+  );
+  if (!r?.rows[0]) throw new Error('Not found');
+  const row = rosterFromRow(r.rows[0]);
+  const arr = memDb.rosters();
+  const i = arr.findIndex((x) => x.id === id);
+  if (i >= 0) arr[i] = row;
+  logAudit('update', 'duty_roster', id, row);
+  return row;
+}
+
+export async function deactivateDutyRoster(id: number): Promise<DutyRoster> {
+  requirePool();
+  const r = await dbQuery<RosterRow>(
+    `UPDATE school_staff_duty_rosters SET is_active = FALSE WHERE id = $1
+     RETURNING id, organization_id, staff_member_id, zone_id, duty_type, day_of_week, start_time, end_time, is_critical_window, is_active`,
+    [id],
+  );
+  if (!r?.rows[0]) throw new Error('Not found');
+  const row = rosterFromRow(r.rows[0]);
+  const arr = memDb.rosters();
+  const i = arr.findIndex((x) => x.id === id);
+  if (i >= 0) arr[i] = row;
+  logAudit('update', 'duty_roster', id, row);
   return row;
 }
 

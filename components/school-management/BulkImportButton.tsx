@@ -25,6 +25,7 @@ interface EntityResult {
 
 interface ImportResponse {
   ok: boolean;
+  dryRun?: boolean;
   totalCreated: number;
   totalErrors: number;
   totalSkipped: number;
@@ -34,9 +35,9 @@ interface ImportResponse {
 
 const ALL_QUERY_KEYS = [
   ['sm-sites', 1],
-  ['sm-buildings-all'],
-  ['sm-floors-all'],
-  ['sm-zones-all'],
+  ['sm-buildings', 1],
+  ['sm-floors', 1],
+  ['sm-zones', 1],
   ['sm-rooms', 1],
   ['sm-classes', 1],
   ['sm-subjects', 1],
@@ -77,7 +78,7 @@ const CSV_FORMAT_ROWS: [string, string][] = [
   ['floor', 'name, building_name, level_no'],
   ['zone', 'name, floor_name, zone_type'],
   ['room', 'room_code, room_name, zone_name, capacity'],
-  ['class', 'name, sort_order'],
+  ['class', 'name'],
   ['section', 'name, class_name, expected_student_count'],
   ['subject', 'name, subject_code'],
   ['teacher', 'name, employee_code, email, phone'],
@@ -88,9 +89,9 @@ const TEMPLATE_CSV = `type,name,address,is_active,site_name,building_name,floor_
 site,Main Campus,123 School Road,true,,,,,,,,,,,,,,,,,,,
 building,Block A,,true,Main Campus,,,,,,,,,,,,,,,,,,
 floor,Ground Floor,,true,Main Campus,Block A,,0,,,,,,,,,,,,,,,,
-zone,Zone A-GF,,true,Main Campus,Block A,Ground Floor,,Classroom,false,,,30,,,,,,,,,,,
-room,,,,,,,,Zone A-GF,,,30,R-101,Room 101,Classroom,,,,,,,,,
-class,Grade 1,,,,,,,,,,,,,,,1,,,,,,
+zone,Zone A-GF,,true,Main Campus,Block A,Ground Floor,,Classroom,false,,,,,,,,,,,,,,
+room,,,,,,,,Zone A-GF,,,,R-101,Room 101,Classroom,,,,,,,,,
+class,Grade 1,,,,,,,,,,,,,,,,,,,,,
 section,A,,,,,,,,,,,,,,,,Grade 1,30,,,,,
 subject,Mathematics,,,,,,,,,,,,,,,,,,,MATH-01,,,
 teacher,Ms. Patel,,,,,,,,,,,,,,,,,,,EMP-T01,teacher@school.edu,+91 9000000001,
@@ -148,8 +149,8 @@ function ResultRow({ result }: { result: EntityResult }) {
       </button>
       {open && hasErrors && (
         <div className={`max-h-36 space-y-1 border-t border-slate-700/80 px-3 py-2 ${scrollStyles}`}>
-          {result.errors.map((e, i) => (
-            <p key={i} className="text-xs leading-relaxed text-red-400/90">
+          {result.errors.map((e) => (
+            <p key={`row-${e.row}-${e.message}`} className="text-xs leading-relaxed text-red-400/90">
               Row {e.row}: {e.message}
             </p>
           ))}
@@ -207,6 +208,8 @@ export function BulkImportButton() {
   const [dragging, setDragging] = useState(false);
   const [pending, setPending] = useState(false);
   const [result, setResult] = useState<ImportResponse | null>(null);
+  const [preview, setPreview] = useState<ImportResponse | null>(null);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [globalError, setGlobalError] = useState('');
 
   function closeModal() {
@@ -224,6 +227,14 @@ export function BulkImportButton() {
     URL.revokeObjectURL(url);
   }
 
+  async function postImport(file: File, dryRun: boolean) {
+    const fd = new FormData();
+    fd.append('file', file);
+    fd.append('dryRun', dryRun ? 'true' : 'false');
+    const res = await fetch('/api/master-data/bulk-import', { method: 'POST', body: fd });
+    return (await res.json()) as ImportResponse;
+  }
+
   async function uploadFile(file: File) {
     if (!file.name.endsWith('.csv') && file.type !== 'text/csv') {
       setGlobalError('Please upload a .csv file');
@@ -231,13 +242,32 @@ export function BulkImportButton() {
     }
     setPending(true);
     setResult(null);
+    setPreview(null);
     setGlobalError('');
     try {
-      const fd = new FormData();
-      fd.append('file', file);
-      const res = await fetch('/api/master-data/bulk-import', { method: 'POST', body: fd });
-      const data = (await res.json()) as ImportResponse;
+      const data = await postImport(file, true);
+      if (!data.ok) {
+        setGlobalError(data.error ?? 'Validation failed');
+        return;
+      }
+      setPreview(data);
+      setPendingFile(file);
+    } catch (e) {
+      setGlobalError((e as Error).message);
+    } finally {
+      setPending(false);
+    }
+  }
+
+  async function commitImport() {
+    if (!pendingFile) return;
+    setPending(true);
+    setGlobalError('');
+    try {
+      const data = await postImport(pendingFile, false);
       setResult(data);
+      setPreview(null);
+      setPendingFile(null);
       if (data.ok && data.totalCreated > 0) {
         ALL_QUERY_KEYS.forEach((key) => qc.invalidateQueries({ queryKey: key }));
       }
@@ -263,6 +293,8 @@ export function BulkImportButton() {
 
   function reset() {
     setResult(null);
+    setPreview(null);
+    setPendingFile(null);
     setGlobalError('');
   }
 
@@ -280,7 +312,7 @@ export function BulkImportButton() {
     );
   }
 
-  const showUploadFlow = !result && !pending;
+  const showUploadFlow = !result && !preview && !pending;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
@@ -380,6 +412,25 @@ export function BulkImportButton() {
             </div>
           )}
 
+          {preview && (
+            <div className="space-y-4">
+              <div className="flex items-start gap-3 rounded-xl border border-sky-800/50 bg-sky-950/30 px-4 py-4">
+                <Info className="h-6 w-6 shrink-0 text-sky-400" />
+                <div>
+                  <p className="text-base font-semibold text-sky-200">Dry-run preview</p>
+                  <p className="mt-1 text-sm text-slate-400">
+                    Would create {preview.totalCreated} row(s), skip {preview.totalSkipped}, with {preview.totalErrors} error(s). Nothing written yet.
+                  </p>
+                </div>
+              </div>
+              <div className={`max-h-[min(40vh,280px)] space-y-2 pr-1 ${scrollStyles}`}>
+                {sortResults(preview.results).map((r) => (
+                  <ResultRow key={r.type} result={r} />
+                ))}
+              </div>
+            </div>
+          )}
+
           {result && (
             <div className="space-y-4">
               <div
@@ -428,7 +479,20 @@ export function BulkImportButton() {
 
         {/* Footer — always visible */}
         <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-slate-800 bg-slate-900/95 px-5 py-3">
-          {result ? (
+          {preview && !result ? (
+            <>
+              <Button size="sm" variant="ghost" onClick={reset} className="text-slate-400">
+                Back
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => void commitImport()}
+                disabled={pending || preview.totalErrors > 0}
+              >
+                {pending ? 'Importing…' : `Commit ${preview.totalCreated} row(s)`}
+              </Button>
+            </>
+          ) : result ? (
             <>
               <Button
                 size="sm"

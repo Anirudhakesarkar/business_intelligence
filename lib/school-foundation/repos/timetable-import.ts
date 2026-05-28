@@ -1,6 +1,9 @@
+import { resolveOrgIdForPg } from '../../school-db/organization-id';
 import { listClasses, listSections, listSubjects, listTeachers } from './foundation-org';
 import { listRooms } from './foundation-spatial';
-import { createTimetableEntry, listTimetableEntries } from './foundation-schedule';
+import { listTimetableEntries } from './foundation-schedule';
+import type { TimetableEntry } from '../types';
+import { isDbEnabled, withDbTransaction, type DbQueryFn } from './shared';
 
 const DAY_NAMES = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
 
@@ -246,6 +249,74 @@ export async function validateTimetableImport(
   };
 }
 
+type TimetableRow = {
+  id: string | number;
+  organization_id: string | number;
+  section_id: string | number;
+  subject_id: string | number | null;
+  room_id: string | number;
+  teacher_id: string | number | null;
+  period_type: string;
+  day_of_week: number;
+  start_time: string;
+  end_time: string;
+  is_active: boolean;
+};
+
+function periodsOverlap(aStart: string, aEnd: string, bStart: string, bEnd: string) {
+  return aStart < bEnd && bStart < aEnd;
+}
+
+function assertNoRoomOverlap(
+  active: Pick<TimetableEntry, 'roomId' | 'dayOfWeek' | 'startTime' | 'endTime' | 'isActive'>[],
+  input: Pick<TimetableEntry, 'roomId' | 'dayOfWeek' | 'startTime' | 'endTime'>,
+) {
+  if (input.endTime <= input.startTime) throw new Error('End time must be after start time.');
+  const roomConflict = active.some(
+    (t) =>
+      t.isActive !== false &&
+      t.roomId === input.roomId &&
+      t.dayOfWeek === input.dayOfWeek &&
+      periodsOverlap(t.startTime, t.endTime, input.startTime, input.endTime),
+  );
+  if (roomConflict) throw new Error('Room has overlapping timetable period.');
+}
+
+async function insertTimetableEntryTx(
+  query: DbQueryFn,
+  organizationId: number,
+  input: Omit<TimetableEntry, 'id' | 'isActive' | 'organizationId'> & {
+    sectionId: number;
+    roomId: number;
+    dayOfWeek: number;
+    startTime: string;
+    endTime: string;
+    periodType: string;
+    teacherId?: number;
+    subjectId?: number;
+  },
+): Promise<number> {
+  const r = await query<TimetableRow>(
+    `INSERT INTO school_timetable_entries (
+       organization_id, section_id, subject_id, room_id, teacher_id, period_type, day_of_week, start_time, end_time, is_active
+     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,TRUE)
+     RETURNING id, organization_id, section_id, subject_id, room_id, teacher_id, period_type, day_of_week, start_time, end_time, is_active`,
+    [
+      resolveOrgIdForPg(organizationId),
+      input.sectionId,
+      input.subjectId ?? null,
+      input.roomId,
+      input.teacherId ?? null,
+      input.periodType,
+      input.dayOfWeek,
+      input.startTime,
+      input.endTime,
+    ],
+  );
+  if (!r?.rows[0]) throw new Error('Failed to create timetable entry');
+  return Number(r.rows[0].id);
+}
+
 export async function commitTimetableImport(
   organizationId: number,
   rows: TimetableImportRow[],
@@ -254,12 +325,12 @@ export async function commitTimetableImport(
   if (!validation.valid) throw new Error(validation.errors.join('; ') || 'Validation failed');
 
   const ctx = await buildLookup(organizationId);
-  let created = 0;
+  const resolved: Array<Omit<TimetableEntry, 'id' | 'isActive'>> = [];
   for (let i = 0; i < rows.length; i++) {
     const result = resolveRow(rows[i], i + 2, ctx);
     if (!result.ok) throw new Error(result.errors.join('; '));
     const r = result.value;
-    await createTimetableEntry({
+    resolved.push({
       organizationId,
       sectionId: r.sectionId,
       roomId: r.roomId,
@@ -270,8 +341,31 @@ export async function commitTimetableImport(
       endTime: r.endTime,
       periodType: r.periodType,
     });
-    created++;
   }
+
+  if (!isDbEnabled()) {
+    const { createTimetableEntry } = await import('./foundation-schedule');
+    for (const input of resolved) {
+      await createTimetableEntry(input);
+    }
+    return { created: resolved.length };
+  }
+
+  const active = (await listTimetableEntries(organizationId)).filter((t) => t.isActive);
+  const pending: TimetableEntry[] = [...active];
+
+  const created = await withDbTransaction(async (query) => {
+    let count = 0;
+    for (const input of resolved) {
+      assertNoRoomOverlap(pending, input);
+      const id = await insertTimetableEntryTx(query, organizationId, input);
+      pending.push({ ...input, id, isActive: true });
+      count++;
+    }
+    return count;
+  });
+
+  await listTimetableEntries(organizationId);
   return { created };
 }
 

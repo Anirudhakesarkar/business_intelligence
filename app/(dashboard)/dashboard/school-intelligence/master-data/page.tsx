@@ -46,11 +46,16 @@ const PHASE1_SETUP: StaticItem[] = [
     label: 'Organization profile',
     why: 'School type, branches, operating goals',
     href: '/dashboard/school-management/organizations',
+    isDone: () => true,
+    progress: () => 'Organization 1 active',
   },
   {
     label: 'Site profile',
     why: 'Campus, building, floor layout',
-    href: '/dashboard/school-management/sites',
+    href: '/dashboard/school-management/master-data',
+    isDone: (h) => h.roomsConfigured.total > 0 || h.camerasMapped.total > 0,
+    progress: (h) =>
+      h.roomsConfigured.total > 0 || h.camerasMapped.total > 0 ? 'Campus hierarchy linked' : undefined,
   },
   {
     label: 'Camera purpose mapping',
@@ -167,7 +172,10 @@ export default function MasterDataPage() {
 
   const phase1Done = PHASE1_SETUP.filter((i) => health && i.isDone && i.isDone(health)).length;
   const phase1Total = PHASE1_SETUP.length;
-  const percent = health?.completionPercent ?? 0;
+  const phase1Percent = phase1Total ? Math.round((phase1Done / phase1Total) * 100) : 0;
+  const percent = health ? phase1Percent : 0;
+  const readyForPhase2 = Boolean(health?.isReadyForPhase2 && phase1Done === phase1Total);
+  const showFoundationPercent = health && (health.completionPercent ?? 0) !== phase1Percent;
 
   return (
     <SIPageShell
@@ -193,7 +201,15 @@ export default function MasterDataPage() {
       )}
 
       {/* Hero progress */}
-      <SISection eyebrow="Setup health" title={`${percent}% complete`}>
+      <SISection
+        eyebrow="Setup health"
+        title={`${percent}% complete`}
+        description={
+          showFoundationPercent
+            ? `Foundation API reports ${health!.completionPercent}% (cameras, rooms, timetable checks). Phase 1 checklist is the gate for intelligence modules.`
+            : undefined
+        }
+      >
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <SIKPICard
             label="Cameras mapped"
@@ -234,8 +250,8 @@ export default function MasterDataPage() {
         </div>
         <div className="mt-2 flex items-center justify-between text-xs">
           <span className="text-slate-400">{phase1Done} of {phase1Total} Phase 1 items complete</span>
-          <span className={`font-medium ${health?.isReadyForPhase2 ? 'text-emerald-300' : 'text-amber-300'}`}>
-            {health?.isReadyForPhase2 ? 'Ready for Phase 2 ✓' : 'Complete Phase 1 first'}
+          <span className={`font-medium ${readyForPhase2 ? 'text-emerald-300' : 'text-amber-300'}`}>
+            {readyForPhase2 ? 'Ready for Phase 2 ✓' : 'Complete Phase 1 first'}
           </span>
         </div>
       </SISection>
@@ -244,8 +260,8 @@ export default function MasterDataPage() {
       {health && health.missing.length > 0 && (
         <SISection icon={<AlertCircle className="h-4 w-4 text-amber-400" />} eyebrow="Outstanding" title={`${health.missing.length} item${health.missing.length === 1 ? '' : 's'} need attention`}>
           <ul className="space-y-1.5 text-sm">
-            {health.missing.map((m) => (
-              <li key={m} className="flex items-start gap-2 rounded-lg border border-amber-500/15 bg-amber-500/[0.04] px-3 py-2 text-amber-100">
+            {health.missing.map((m, i) => (
+              <li key={`missing-${i}-${m}`} className="flex items-start gap-2 rounded-lg border border-amber-500/15 bg-amber-500/[0.04] px-3 py-2 text-amber-100">
                 <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-400" />
                 {m}
               </li>

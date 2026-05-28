@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Loader2, AlertTriangle, ArrowRight, Sparkles } from 'lucide-react';
 import { SIPageShell } from '@/components/school-intelligence/SIPageShell';
 import { SIKPICard } from '@/components/school-intelligence/SIKPICard';
@@ -58,6 +58,23 @@ export function SchoolDailyModuleView({
 }: Props) {
   const [date, setDate] = useState(todayIso());
   const orgId = 1;
+  const [foundationReady, setFoundationReady] = useState<boolean | null>(null);
+  const [aggregating, setAggregating] = useState(false);
+  const [aggregateNote, setAggregateNote] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetch(`/api/school-management/setup-health?organizationId=${orgId}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((h: { timetableEntries?: number; rosterEntries?: number } | null) => {
+        if (!cancelled && h) {
+          setFoundationReady((h.timetableEntries ?? 0) > 0 && (h.rosterEntries ?? 0) > 0);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [orgId]);
   const scoreKey = DAILY_TO_SCORE_MODULE[module];
   const scores = useSchoolModuleScore(scoreKey, orgId, date);
   const primary = useSchoolDailyModule(module, orgId, date);
@@ -81,6 +98,34 @@ export function SchoolDailyModuleView({
       }));
 
   const st = scoreTone(scores.score);
+
+  const runAggregation = async () => {
+    setAggregating(true);
+    setAggregateNote(null);
+    try {
+      const res = await fetch(
+        `/api/school-daily-summaries/aggregate?organizationId=${orgId}&date=${encodeURIComponent(date)}`,
+        { method: 'POST' },
+      );
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.error ?? res.statusText);
+      if (body.skipped && body.reason === 'holiday') {
+        setAggregateNote('This date is marked as a holiday — no daily summary was generated.');
+      } else {
+        setAggregateNote(null);
+      }
+      await primary.reload();
+      if (secondaryModule) await secondary.reload();
+    } catch (e) {
+      setAggregateNote(e instanceof Error ? e.message : 'Aggregation failed');
+    } finally {
+      setAggregating(false);
+    }
+  };
+
+  useEffect(() => {
+    setAggregateNote(null);
+  }, [date, module]);
 
   return (
     <SIPageShell
@@ -191,8 +236,44 @@ export function SchoolDailyModuleView({
         title="What happened today"
         description="Plain-language facts derived from the Phase 4 summary."
       >
-        {facts.length === 0 && !loading && (
-          <p className="text-sm text-slate-500">No summary facts for this date yet.</p>
+        {facts.length === 0 && !loading && !primary.error && (
+          <div className="rounded-lg border border-slate-800 bg-slate-950/40 px-4 py-3 text-sm text-slate-400">
+            <p>No summary facts for {date} yet.</p>
+            {foundationReady === true && (
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  disabled={aggregating}
+                  onClick={() => void runAggregation()}
+                  className="inline-flex items-center gap-1.5 rounded-md border border-sky-500/40 bg-sky-500/10 px-3 py-1.5 text-xs font-medium text-sky-200 hover:bg-sky-500/20 disabled:opacity-50"
+                >
+                  {aggregating ? (
+                    <>
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      Aggregating…
+                    </>
+                  ) : (
+                    `Generate summary for ${date}`
+                  )}
+                </button>
+                <button
+                  type="button"
+                  className="text-xs text-slate-500 hover:text-slate-300"
+                  onClick={() =>
+                    void fetch('/api/school-daily-summaries/seed', { method: 'POST' }).then(() => primary.reload())
+                  }
+                >
+                  Or seed demo pipeline
+                </button>
+              </div>
+            )}
+            {foundationReady === false && (
+              <p className="mt-2 text-xs text-slate-500">
+                Complete School Management setup (timetable and staff duty) before daily modules can show live periods and shifts.
+              </p>
+            )}
+            {aggregateNote && <p className="mt-2 text-xs text-amber-300/90">{aggregateNote}</p>}
+          </div>
         )}
         <ul className="space-y-3">
           {facts.map((f, i) => (

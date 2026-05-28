@@ -4,6 +4,7 @@ import { seedDemoSchool } from './seed';
 import {
   createCalendarDay,
   createDutyRoster,
+  createZone,
   db,
   getSetupHealth,
   getNextSetupAction,
@@ -37,6 +38,53 @@ describe('school-foundation setup health', () => {
     const next = getNextSetupAction(1);
     assert.ok(next);
     assert.match(next!.href, /cameras/);
+  });
+
+  it('ignores orphan risk zones outside org campus hierarchy', async () => {
+    resetStoreForSeed();
+    await seedDemoSchool(1);
+    const before = getSetupHealth(1);
+    createZone({ name: 'Orphan Global Risk', zoneType: 'playground', isRiskZone: true, riskCategory: 'Playground' });
+    const after = getSetupHealth(1);
+    const riskMsg = (m: string[]) => m.filter((x) => x.includes('risk zone'));
+    assert.deepEqual(riskMsg(after.missing), riskMsg(before.missing));
+  });
+
+  it('completionPercent is 100 only when ready for phase 2', async () => {
+    resetStoreForSeed();
+    await seedDemoSchool(1);
+    const health = getSetupHealth(1);
+    if (health.isReadyForPhase2) {
+      assert.equal(health.completionPercent, 100);
+      assert.equal(health.missing.length, 0);
+    } else if (health.missing.length > 0) {
+      assert.ok(health.completionPercent <= 99);
+      assert.equal(health.isReadyForPhase2, false);
+    }
+  });
+
+  it('counts only active cameras, timetable, and roster rows', async () => {
+    resetStoreForSeed();
+    await seedDemoSchool(1);
+    const baseline = getSetupHealth(1);
+    assert.ok(baseline.camerasMapped.total > 0);
+    assert.ok(baseline.timetableEntries > 0);
+    assert.ok(baseline.rosterEntries > 0);
+
+    for (const c of db.cameras().filter((x) => x.organizationId === 1 && x.status === 'Active')) {
+      c.status = 'Inactive';
+    }
+    for (const t of db.timetable().filter((x) => x.organizationId === 1 && x.isActive)) {
+      t.isActive = false;
+    }
+    for (const r of db.rosters().filter((x) => x.organizationId === 1 && x.isActive)) {
+      r.isActive = false;
+    }
+
+    const after = getSetupHealth(1);
+    assert.equal(after.camerasMapped.total, 0);
+    assert.equal(after.timetableEntries, 0);
+    assert.equal(after.rosterEntries, 0);
   });
 
   it('logs audit on calendar and roster create', async () => {

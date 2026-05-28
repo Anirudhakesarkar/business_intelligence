@@ -32,6 +32,7 @@ export default function SchoolActionsPage() {
   const [impact, setImpact] = useState<Record<number, { delta: number; label: string }>>({});
   const [completing, setCompleting] = useState<number | null>(null);
   const [statusTab, setStatusTab] = useState<StatusTab>('open');
+  const [dataSource, setDataSource] = useState<'postgres' | 'memory' | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -39,6 +40,7 @@ export default function SchoolActionsPage() {
       const res = await fetch('/api/gpt/actions?organizationId=1');
       const data = await res.json();
       setActions(data.actions ?? []);
+      setDataSource(data.source === 'postgres' ? 'postgres' : data.source === 'memory' ? 'memory' : null);
     } finally {
       setLoading(false);
     }
@@ -83,9 +85,27 @@ export default function SchoolActionsPage() {
           description="Recommended actions generated from GPT recommendations — complete tasks to improve school scores."
           icon={<ListChecks className="h-6 w-6" />}
         />
-        <Button size="sm" variant="outline" onClick={load} disabled={loading}>
-          <RefreshCw className="mr-1 h-3 w-3" /> Refresh
-        </Button>
+        <div className="flex items-center gap-2">
+          {dataSource && (
+            <span
+              className={`rounded border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide ${
+                dataSource === 'postgres'
+                  ? 'border-emerald-500/40 text-emerald-300'
+                  : 'border-amber-500/40 text-amber-300'
+              }`}
+              title={
+                dataSource === 'postgres'
+                  ? 'Reading from school_gpt_action_tasks in Postgres'
+                  : 'Reading from in-memory store (snapshot mode)'
+              }
+            >
+              {dataSource === 'postgres' ? 'Postgres' : 'In-memory'}
+            </span>
+          )}
+          <Button size="sm" variant="outline" onClick={load} disabled={loading}>
+            <RefreshCw className="mr-1 h-3 w-3" /> Refresh
+          </Button>
+        </div>
       </div>
 
       {/* Summary cards */}

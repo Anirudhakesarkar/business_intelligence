@@ -1,4 +1,5 @@
 import type { CameraPurpose, ProcessOwner, RiskCategory } from './types';
+import { demoMetadata, tagCurrentFoundationAsDemo } from './demo-tags';
 import {
   createBuilding,
   createCalendarDay,
@@ -137,6 +138,7 @@ export function seedDemoSchoolMemory(organizationId = 1) {
       criticality: z.riskCategory === 'ServerRoom' || z.riskCategory === 'Gate' ? 'Critical' : 'High',
       zoneId: z.id,
       status: 'Active',
+      metadata: demoMetadata(),
     });
     camCount++;
   }
@@ -156,7 +158,11 @@ export function seedDemoSchoolMemory(organizationId = 1) {
       zoneId: zone?.id,
       roomId: room?.id,
       status: 'Active',
-      metadata: purpose === 'Classroom' ? { teachingZones: { boardPolygon: [[0, 0], [100, 0], [100, 40]], deskPolygon: [[0, 50], [100, 50]] } } : undefined,
+      metadata: demoMetadata(
+        purpose === 'Classroom'
+          ? { teachingZones: { boardPolygon: [[0, 0], [100, 0], [100, 40]], deskPolygon: [[0, 50], [100, 50]] } }
+          : undefined,
+      ),
     });
     camCount++;
   }
@@ -265,5 +271,7 @@ export async function seedDemoSchool(organizationId = 1) {
     const { seedDemoSchoolPg } = await import('./seed-pg');
     return seedDemoSchoolPg(organizationId);
   }
-  return seedDemoSchoolMemory(organizationId);
+  const result = seedDemoSchoolMemory(organizationId);
+  await tagCurrentFoundationAsDemo(organizationId);
+  return result;
 }

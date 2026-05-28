@@ -136,10 +136,6 @@ export default function EventDetailPage() {
     );
   }
 
-  const signalHref = ev.cameraId
-    ? `/dashboard/school-management/signals?cameraId=${ev.cameraId}`
-    : '/dashboard/school-management/signals';
-
   const ctxRows: Array<[string, string | undefined]> = [
     ['Rule', ctx.ruleName],
     ['Room', ctx.roomName],
@@ -270,14 +266,16 @@ export default function EventDetailPage() {
         )}
       </div>
 
-      <SISection title="Phase 2 evidence" description="Inspect raw signals for this camera in the Signal Timeline.">
-        <Link
-          href={signalHref}
-          className="inline-flex items-center gap-1 rounded-md border border-slate-800 bg-slate-950/40 px-2.5 py-1.5 text-xs font-medium text-sky-300 hover:border-sky-500/40 hover:text-sky-200"
-        >
-          Open Signal Timeline <ArrowRight className="h-3 w-3" />
-        </Link>
-      </SISection>
+      {ev.cameraId != null && (
+        <SISection title="Camera" description="Governance record for the camera linked to this event.">
+          <Link
+            href={`/dashboard/school-management/cameras/${ev.cameraId}`}
+            className="inline-flex items-center gap-1 rounded-md border border-slate-800 bg-slate-950/40 px-2.5 py-1.5 text-xs font-medium text-sky-300 hover:border-sky-500/40 hover:text-sky-200"
+          >
+            Open camera detail <ArrowRight className="h-3 w-3" />
+          </Link>
+        </SISection>
+      )}
 
       {ev.status !== 'Resolved' && (
         <SISection icon={<ShieldCheck className="h-4 w-4" />} title="Take action">

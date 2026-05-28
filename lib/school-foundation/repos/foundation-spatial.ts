@@ -129,6 +129,30 @@ export async function deleteBuilding(id: number): Promise<{ ok: true }> {
   return { ok: true };
 }
 
+/** Buildings linked to the org through site → building (excludes orphan rows). */
+export async function listBuildingsForOrganization(organizationId: number | string): Promise<Building[]> {
+  if (!isDbEnabled()) {
+    const org = Number(organizationId);
+    const siteIds = memDb.sites().filter((s) => s.organizationId === org).map((s) => s.id);
+    return memDb.buildings().filter((b) => siteIds.includes(b.siteId));
+  }
+  requirePool();
+  const pgOrgId = resolveOrgIdForPg(organizationId);
+  const siteTable = await resolveSiteTable();
+  const siteColumn = await resolveBuildingSiteColumn();
+  const r = await dbQuery<BuildingRow>(
+    `SELECT b.id, b.${siteColumn} AS site_id, b.name, b.is_active
+     FROM school_buildings b
+     JOIN ${siteTable} s ON s.id = b.${siteColumn}
+     WHERE s.organization_id = $1
+     ORDER BY b.id`,
+    [pgOrgId],
+  );
+  const rows = (r?.rows ?? []).map(buildingFromRow);
+  for (const row of rows) mirrorBuilding(row);
+  return rows;
+}
+
 export async function hydrateBuildingsFromPg(): Promise<{ hydrated: number }> {
   const rows = await listBuildings();
   return { hydrated: rows.length };
@@ -238,6 +262,32 @@ export async function deleteFloor(id: number): Promise<{ ok: true }> {
   return { ok: true };
 }
 
+/** Floors linked to the org through site → building → floor (excludes orphan rows). */
+export async function listFloorsForOrganization(organizationId: number | string): Promise<Floor[]> {
+  if (!isDbEnabled()) {
+    const org = Number(organizationId);
+    const siteIds = memDb.sites().filter((s) => s.organizationId === org).map((s) => s.id);
+    const buildingIds = memDb.buildings().filter((b) => siteIds.includes(b.siteId)).map((b) => b.id);
+    return memDb.floors().filter((f) => buildingIds.includes(f.buildingId));
+  }
+  requirePool();
+  const pgOrgId = resolveOrgIdForPg(organizationId);
+  const siteTable = await resolveSiteTable();
+  const siteColumn = await resolveBuildingSiteColumn();
+  const r = await dbQuery<FloorRow>(
+    `SELECT f.id, f.building_id, f.name, f.level_no
+     FROM school_floors f
+     JOIN school_buildings b ON b.id = f.building_id
+     JOIN ${siteTable} s ON s.id = b.${siteColumn}
+     WHERE s.organization_id = $1
+     ORDER BY f.id`,
+    [pgOrgId],
+  );
+  const rows = (r?.rows ?? []).map(floorFromRow);
+  for (const row of rows) mirrorFloor(row);
+  return rows;
+}
+
 export async function hydrateFloorsFromPg(): Promise<{ hydrated: number }> {
   const rows = await listFloors();
   return { hydrated: rows.length };
@@ -294,6 +344,36 @@ export async function listZones(floorId?: number): Promise<Zone[]> {
     : `SELECT id, floor_id, name, zone_type, is_risk_zone, risk_category, capacity FROM school_zones ORDER BY id`;
   const params = floorId ? [floorId] : [];
   const r = await dbQuery<ZoneRow>(sql, params);
+  const rows = (r?.rows ?? []).map(zoneFromRow);
+  for (const row of rows) mirrorZone(row);
+  return rows;
+}
+
+/** Zones linked to the org through site → building → floor (excludes orphan rows). */
+export async function listZonesForOrganization(organizationId?: number | string): Promise<Zone[]> {
+  if (!isDbEnabled()) {
+    if (organizationId == null) return [...memDb.zones()];
+    const org = Number(organizationId);
+    const siteIds = memDb.sites().filter((s) => s.organizationId === org).map((s) => s.id);
+    const buildingIds = memDb.buildings().filter((b) => siteIds.includes(b.siteId)).map((b) => b.id);
+    const floorIds = memDb.floors().filter((f) => buildingIds.includes(f.buildingId)).map((f) => f.id);
+    return memDb.zones().filter((z) => z.floorId != null && floorIds.includes(z.floorId));
+  }
+  requirePool();
+  if (organizationId === undefined) return listZones();
+  const pgOrgId = resolveOrgIdForPg(organizationId);
+  const siteTable = await resolveSiteTable();
+  const siteColumn = await resolveBuildingSiteColumn();
+  const r = await dbQuery<ZoneRow>(
+    `SELECT DISTINCT z.id, z.floor_id, z.name, z.zone_type, z.is_risk_zone, z.risk_category, z.capacity
+     FROM school_zones z
+     JOIN school_floors f ON f.id = z.floor_id
+     JOIN school_buildings b ON b.id = f.building_id
+     JOIN ${siteTable} s ON s.id = b.${siteColumn}
+     WHERE s.organization_id = $1
+     ORDER BY z.id`,
+    [pgOrgId],
+  );
   const rows = (r?.rows ?? []).map(zoneFromRow);
   for (const row of rows) mirrorZone(row);
   return rows;
@@ -408,9 +488,20 @@ export async function deleteZone(id: number): Promise<{ ok: true }> {
   return { ok: true };
 }
 
+/** Load org-linked zones only (excludes orphan rows) into the mem cache. */
 export async function hydrateZonesFromPg(): Promise<{ hydrated: number }> {
-  const rows = await listZones();
-  return { hydrated: rows.length };
+  if (!isDbEnabled()) return { hydrated: 0 };
+  memDb.zones().length = 0;
+  const siteTable = await resolveSiteTable();
+  const orgRows = await dbQuery<{ organization_id: string | number }>(
+    `SELECT DISTINCT organization_id FROM ${siteTable} ORDER BY organization_id`,
+  );
+  const seen = new Set<number>();
+  for (const row of orgRows?.rows ?? []) {
+    const zones = await listZonesForOrganization(orgIdFromPg(row.organization_id));
+    for (const z of zones) seen.add(z.id);
+  }
+  return { hydrated: seen.size };
 }
 
 // ─── Rooms ───────────────────────────────────────────────────────────────────

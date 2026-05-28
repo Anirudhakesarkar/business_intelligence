@@ -8,6 +8,7 @@ describe('school-db migrate', () => {
     assert.ok(SCHOOL_MIGRATION_FILES.includes('071_school_score_engine.sql'));
     assert.ok(SCHOOL_MIGRATION_FILES.includes('073_school_runtime_snapshot.sql'));
     assert.ok(SCHOOL_MIGRATION_FILES.includes('074_school_campuses_align.sql'));
+    assert.ok(SCHOOL_MIGRATION_FILES.includes('075_school_demo_entity_tags.sql'));
   });
 
   it('returns error when DATABASE_URL unset', async () => {

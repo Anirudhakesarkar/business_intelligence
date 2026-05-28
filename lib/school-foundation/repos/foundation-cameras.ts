@@ -1,6 +1,12 @@
 import type { Criticality, SchoolCamera } from '../types';
 import { orgIdFromPg, resolveOrgIdForPg } from '../../school-db/organization-id';
-import { db as memDb, logAudit, _ensureNextIdAbove } from '../store';
+import {
+  db as memDb,
+  deactivateCamera as deactivateCameraMem,
+  purgeCamera as purgeCameraMem,
+  logAudit,
+  _ensureNextIdAbove,
+} from '../store';
 import { dbQuery, isDbEnabled, num, requirePool } from './shared';
 
 type CameraRow = {
@@ -99,7 +105,7 @@ export async function createCamera(input: Omit<SchoolCamera, 'id'>): Promise<Sch
       input.roomId ?? null,
       input.cameraCode,
       input.name.trim(),
-      input.streamUrl ?? null,
+      input.streamUrl?.trim() || `rtsp://pending/${input.cameraCode}`,
       input.purpose,
       input.processOwner,
       input.criticality ?? 'Medium',
@@ -154,6 +160,62 @@ export async function patchCamera(id: number, patch: Partial<SchoolCamera>): Pro
   if (i >= 0) arr[i] = row;
   logAudit('update', 'camera', id, row);
   return row;
+}
+
+function isInactiveStatus(status: string | undefined): boolean {
+  return String(status ?? '').trim().toLowerCase() === 'inactive';
+}
+
+export async function deactivateCamera(id: number): Promise<SchoolCamera> {
+  if (!isDbEnabled()) return deactivateCameraMem(id);
+  requirePool();
+  const existing = memDb.cameras().find((c) => c.id === id);
+  if (!existing) {
+    await listCameras();
+    if (!memDb.cameras().find((c) => c.id === id)) throw new Error('Camera not found');
+  }
+  const r = await dbQuery<CameraRow>(
+    `UPDATE school_mgmt_cameras SET status = 'Inactive' WHERE id = $1
+     RETURNING id, organization_id, zone_id, room_id, camera_code, name, stream_url, purpose, process_owner,
+               criticality, status, active_from, active_to, metadata`,
+    [id],
+  );
+  if (!r?.rows[0]) throw new Error('Camera not found');
+  const row = cameraFromRow(r.rows[0]);
+  const arr = memDb.cameras();
+  const i = arr.findIndex((c) => c.id === id);
+  if (i >= 0) arr[i] = row;
+  logAudit('update', 'camera', id, row);
+  return row;
+}
+
+export async function purgeCamera(id: number): Promise<{ id: number; purged: true }> {
+  if (!isDbEnabled()) return purgeCameraMem(id);
+  requirePool();
+  const existing = memDb.cameras().find((c) => c.id === id);
+  if (!existing) {
+    await listCameras();
+    if (!memDb.cameras().find((c) => c.id === id)) throw new Error('Camera not found');
+  }
+  const r = await dbQuery(`DELETE FROM school_mgmt_cameras WHERE id = $1 RETURNING id`, [id]);
+  if (!r?.rows[0]) throw new Error('Camera not found');
+  const arr = memDb.cameras();
+  const i = arr.findIndex((c) => c.id === id);
+  if (i >= 0) arr.splice(i, 1);
+  logAudit('delete', 'camera', id);
+  return { id, purged: true };
+}
+
+/** Active cameras are soft-deleted (Inactive); already-inactive cameras are removed from the database. */
+export async function deleteCamera(id: number): Promise<SchoolCamera | { id: number; purged: true }> {
+  let existing = memDb.cameras().find((c) => c.id === id);
+  if (!existing) {
+    await listCameras();
+    existing = memDb.cameras().find((c) => c.id === id);
+  }
+  if (!existing) throw new Error('Camera not found');
+  if (isInactiveStatus(existing.status)) return purgeCamera(id);
+  return deactivateCamera(id);
 }
 
 export type ImportCameraRow = {

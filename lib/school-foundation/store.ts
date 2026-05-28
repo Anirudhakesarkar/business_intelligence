@@ -109,12 +109,16 @@ export function createRoom(input: Omit<Room, 'id'>) {
   return row;
 }
 
-export function listRooms(organizationId?: number) {
-  if (!organizationId) return [...rooms];
+export function listZonesForOrganization(organizationId: number) {
   const siteIds = sites.filter((s) => s.organizationId === organizationId).map((s) => s.id);
   const buildingIds = buildings.filter((b) => siteIds.includes(b.siteId)).map((b) => b.id);
   const floorIds = floors.filter((f) => buildingIds.includes(f.buildingId)).map((f) => f.id);
-  const zoneIds = zones.filter((z) => z.floorId && floorIds.includes(z.floorId)).map((z) => z.id);
+  return zones.filter((z) => z.floorId && floorIds.includes(z.floorId));
+}
+
+export function listRooms(organizationId?: number) {
+  if (!organizationId) return [...rooms];
+  const zoneIds = listZonesForOrganization(organizationId).map((z) => z.id);
   return rooms.filter((r) => r.zoneId && zoneIds.includes(r.zoneId));
 }
 
@@ -145,6 +149,25 @@ export function patchCamera(id: number, patch: Partial<SchoolCamera>) {
   cameras[i] = merged;
   logAudit('update', 'camera', id, merged, before);
   return merged;
+}
+
+export function deactivateCamera(id: number) {
+  const i = cameras.findIndex((c) => c.id === id);
+  if (i < 0) throw new Error('Camera not found');
+  const before = cameras[i];
+  const row = { ...before, status: 'Inactive' as const };
+  cameras[i] = row;
+  logAudit('update', 'camera', id, row, before);
+  return row;
+}
+
+export function purgeCamera(id: number): { id: number; purged: true } {
+  const i = cameras.findIndex((c) => c.id === id);
+  if (i < 0) throw new Error('Camera not found');
+  const before = cameras[i];
+  cameras.splice(i, 1);
+  logAudit('delete', 'camera', id, undefined, before);
+  return { id, purged: true };
 }
 
 export function createClass(input: Omit<SchoolClass, 'id'>) {
@@ -393,6 +416,29 @@ export function deactivateTimetable(id: number) {
   return t;
 }
 
+export function patchTimetableEntry(
+  id: number,
+  patch: Partial<Pick<TimetableEntry, 'sectionId' | 'subjectId' | 'roomId' | 'teacherId' | 'periodType' | 'dayOfWeek' | 'startTime' | 'endTime'>>,
+) {
+  const i = timetable.findIndex((t) => t.id === id);
+  if (i < 0) throw new Error('Not found');
+  const merged = { ...timetable[i], ...patch };
+  if (merged.endTime <= merged.startTime) throw new Error('End time must be after start time.');
+  const roomConflict = timetable.some(
+    (t) =>
+      t.isActive &&
+      t.id !== id &&
+      t.roomId === merged.roomId &&
+      t.dayOfWeek === merged.dayOfWeek &&
+      periodsOverlap(t.startTime, t.endTime, merged.startTime, merged.endTime),
+  );
+  if (roomConflict) throw new Error('Room has overlapping timetable period.');
+  const before = timetable[i];
+  timetable[i] = merged;
+  logAudit('update', 'timetable', id, merged, before);
+  return merged;
+}
+
 export function createDutyRoster(input: Omit<DutyRoster, 'id' | 'isActive'>) {
   if (input.endTime <= input.startTime) throw new Error('End time must be after start time.');
   const row: DutyRoster = { ...input, id: nid(), isActive: true };
@@ -497,7 +543,7 @@ export function getNextSetupAction(organizationId: number): import('./types').Se
   if (cal.length < 30) {
     return { label: 'Complete school calendar', href: '/dashboard/school-management/calendar', reason: 'Add at least 30 calendar days including holidays and exam periods.' };
   }
-  const gateZones = zones.filter((z) => z.zoneType.toLowerCase().includes('gate'));
+  const gateZones = listZonesForOrganization(organizationId).filter((z) => z.zoneType.toLowerCase().includes('gate'));
   const criticalGate = rosters.filter((r) => r.organizationId === organizationId && r.isCriticalWindow && r.isActive);
   if (gateZones.length > 0 && criticalGate.length === 0) {
     return { label: 'Assign critical gate duty', href: '/dashboard/school-management/staff-duty', reason: 'Critical gate windows need staffed duty roster entries.' };
@@ -521,12 +567,13 @@ export function getSetupHealth(organizationId: number): SetupHealth {
   if (tt.length === 0) missing.push('Add timetable entries');
   if (rr.length === 0) missing.push('Add staff duty roster entries');
   if (cal.length < 30) missing.push('Add at least 30 calendar days');
-  const gateZones = zones.filter((z) => z.zoneType.toLowerCase().includes('gate'));
+  const orgZones = listZonesForOrganization(organizationId);
+  const gateZones = orgZones.filter((z) => z.zoneType.toLowerCase().includes('gate'));
   const criticalGate = rosters.filter((r) => r.organizationId === organizationId && r.isCriticalWindow && r.isActive);
   if (gateZones.length > 0 && criticalGate.length === 0) missing.push('Assign critical gate duty staff');
-  const riskWithoutCamera = zones.filter((z) => z.isRiskZone && !cameras.some((c) => c.zoneId === z.id && c.organizationId === organizationId));
+  const riskWithoutCamera = orgZones.filter((z) => z.isRiskZone && !cameras.some((c) => c.zoneId === z.id && c.organizationId === organizationId));
   if (riskWithoutCamera.length) missing.push(`${riskWithoutCamera.length} risk zone(s) without camera coverage`);
-  const playgroundZones = zones.filter((z) => z.isRiskZone && (z.riskCategory === 'Playground' || z.zoneType.toLowerCase().includes('playground')));
+  const playgroundZones = orgZones.filter((z) => z.isRiskZone && (z.riskCategory === 'Playground' || z.zoneType.toLowerCase().includes('playground')));
   const playgroundWaiver = getComplianceConfig(organizationId).playgroundCameraWaiver === true;
   for (const pz of playgroundZones) {
     const hasCam = cameras.some((c) => c.organizationId === organizationId && c.zoneId === pz.id && c.status === 'Active');
@@ -546,8 +593,14 @@ export function getSetupHealth(organizationId: number): SetupHealth {
     rr.length > 0,
     cal.length >= 30,
   ];
-  const completionPercent = Math.round((checks.filter(Boolean).length / checks.length) * 100);
-  const isReadyForPhase2 = missing.length === 0 || (checks.every(Boolean) && criticalGate.length > 0);
+  const dedupedMissing = [...new Set(missing)];
+  const checksPercent = Math.round((checks.filter(Boolean).length / checks.length) * 100);
+  const isReadyForPhase2 = checks.every(Boolean) && dedupedMissing.length === 0;
+  const completionPercent = isReadyForPhase2
+    ? 100
+    : dedupedMissing.length > 0
+      ? Math.min(checksPercent, 99)
+      : checksPercent;
   const nextAction = getNextSetupAction(organizationId);
   return {
     completionPercent,
@@ -556,8 +609,8 @@ export function getSetupHealth(organizationId: number): SetupHealth {
     timetableEntries: tt.length,
     rosterEntries: rr.length,
     calendarDays: cal.length,
-    isReadyForPhase2: checks.every(Boolean) && missing.length === 0,
-    missing,
+    isReadyForPhase2,
+    missing: dedupedMissing,
     nextAction,
     calendarSummary: getCalendarSummary(organizationId),
   };

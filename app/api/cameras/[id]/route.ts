@@ -1,7 +1,7 @@
 import '@/lib/school-persistence/init';
 import { NextRequest } from 'next/server';
 import { json, err } from '@/lib/school-foundation/json';
-import { patchCamera, listCameras, DbDisabledError } from '@/lib/school-foundation/repos';
+import { patchCamera, listCameras, deleteCamera, DbDisabledError } from '@/lib/school-foundation/repos';
 import { ensureFoundationHydrated } from '@/lib/school-db/hydrate';
 
 export async function GET(_: NextRequest, { params }: { params: { id: string } }) {
@@ -24,5 +24,16 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   } catch (e) {
     if (e instanceof DbDisabledError) return err(e.message, 503);
     return err((e as Error).message);
+  }
+}
+
+export async function DELETE(_: NextRequest, { params }: { params: { id: string } }) {
+  try {
+    return json(await deleteCamera(Number(params.id)));
+  } catch (e) {
+    if (e instanceof DbDisabledError) return err(e.message, 503);
+    const msg = (e as Error).message;
+    if (/not found/i.test(msg)) return err(msg, 404);
+    return err(msg);
   }
 }

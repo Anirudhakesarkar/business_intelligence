@@ -119,8 +119,7 @@ export default function DigestPage() {
               <p className="font-medium text-slate-400">Pipeline setup</p>
               <ol className="list-decimal list-inside space-y-1">
                 <li>School Management → Master Data → Seed demo</li>
-                <li>School Management → Signals → Seed signals</li>
-                <li>Intelligence → Rules → Seed default rules</li>
+                <li>Intelligence → Rules → Seed rules + signals</li>
                 <li>Intelligence → Events → Evaluate rules</li>
                 <li>Then regenerate this digest</li>
               </ol>

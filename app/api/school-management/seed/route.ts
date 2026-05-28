@@ -1,20 +1,15 @@
 import '@/lib/school-persistence/init';
-import { json } from '@/lib/school-foundation/json';
+import { json, err } from '@/lib/school-foundation/json';
 import { seedDemoSchool } from '@/lib/school-foundation/seed';
-import { setAuditActor } from '@/lib/school-foundation/store';
-import { parseActorId } from '@/lib/school-auth/rbac';
-
-function actorFrom(req: import('next/server').NextRequest) {
-  try {
-    const p = JSON.parse(req.headers.get('x-school-principal') ?? 'null');
-    return parseActorId(p);
-  } catch { return undefined; }
-}
+import { isSchoolDemoUiEnabled } from '@/lib/school-foundation/runtime-mode';
 
 export async function POST() {
+  if (!isSchoolDemoUiEnabled()) {
+    return err('Demo seed is disabled in production mode (SCHOOL_PRODUCTION_MODE=1 or SCHOOL_SNAPSHOT=0).', 403);
+  }
   try {
     const result = await seedDemoSchool(1);
-    return json({ ok: true, ...result });
+    return json({ ok: true, tagged: true, ...result });
   } catch (e) {
     return json({ ok: false, error: (e as Error).message }, 500);
   }

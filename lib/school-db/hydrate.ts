@@ -6,6 +6,7 @@ import { getOverallScore, scoreDb } from '../school-score-engine/store';
 import { DEFAULT_WEIGHTS } from '../school-score-engine/weights';
 import { hydrateFoundationFromPg } from '../school-foundation/repos';
 import { dbQuery, isDbEnabled } from './pool';
+import { isStrictDbMode } from './strict-mode';
 import { loadDailyScore, loadGptSummary } from './persist-scores-gpt';
 
 let hydrateInflight: Promise<void> | null = null;
@@ -19,9 +20,9 @@ let foundationHydrateInflight: Promise<void> | null = null;
 export function ensureFoundationHydrated() {
   if (!isDbEnabled()) return Promise.resolve();
   if (!foundationHydrateInflight) {
-    foundationHydrateInflight = (async () => {
-      await hydrateFoundationFromPg().catch(() => undefined);
-    })();
+    foundationHydrateInflight = hydrateFoundationFromPg().catch((err) => {
+      if (isStrictDbMode()) throw err;
+    });
   }
   return foundationHydrateInflight;
 }

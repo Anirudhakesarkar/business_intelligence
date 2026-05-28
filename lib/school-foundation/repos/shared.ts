@@ -1,4 +1,5 @@
-import { dbQuery, isDbEnabled } from '../../school-db/pool';
+import { getPool, dbQuery, isDbEnabled } from '../../school-db/pool';
+import type { QueryResultRow } from 'pg';
 const tableExistsCache = new Map<string, boolean>();
 const columnExistsCache = new Map<string, boolean>();
 
@@ -46,6 +47,30 @@ export async function columnExists(tableName: string, columnName: string): Promi
   const exists = Boolean(r?.rows?.[0]?.exists);
   columnExistsCache.set(key, exists);
   return exists;
+}
+
+export type DbQueryFn = <T extends QueryResultRow = QueryResultRow>(
+  sql: string,
+  params?: unknown[],
+) => Promise<{ rows: T[]; rowCount: number | null } | null>;
+
+/** Run queries in a single Postgres transaction (rolls back on error). */
+export async function withDbTransaction<T>(fn: (query: DbQueryFn) => Promise<T>): Promise<T> {
+  const p = getPool();
+  if (!p) throw new DbDisabledError();
+  const client = await p.connect();
+  const query: DbQueryFn = async (sql, params = []) => client.query(sql, params);
+  try {
+    await client.query('BEGIN');
+    const result = await fn(query);
+    await client.query('COMMIT');
+    return result;
+  } catch (e) {
+    await client.query('ROLLBACK');
+    throw e;
+  } finally {
+    client.release();
+  }
 }
 
 export { dbQuery, isDbEnabled };

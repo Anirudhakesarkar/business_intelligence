@@ -1,12 +1,11 @@
 'use client';
 
-import { useState, useRef, useMemo } from 'react';
+import { useState, useRef, useMemo, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet } from '@/components/ui/sheet';
 import { SMPageHeader } from '@/components/school-management/SMPageHeader';
-import { schoolApiDelete, schoolApiGet, schoolApiPost } from '@/lib/school-management/api';
+import { schoolApiDelete, schoolApiGet, schoolApiPatch, schoolApiPost } from '@/lib/school-management/api';
 
 const ORG_ID = 1;
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -59,9 +58,10 @@ function sectionLabel(sec: Row | undefined, classMap: Record<string, Row>): stri
   return cls ? `${String(cls.name)} — ${String(sec.name)}` : String(sec.name);
 }
 
-function WeeklyGrid({ entries, sections, classes, subjects, teachers, rooms, onDelete }: {
+function WeeklyGrid({ entries, sections, classes, subjects, teachers, rooms, onDelete, onEdit }: {
   entries: Row[]; sections: Row[]; classes: Row[]; subjects: Row[]; teachers: Row[]; rooms: Row[];
   onDelete: (id: number) => void;
+  onEdit: (row: Row) => void;
 }) {
   const secMap = Object.fromEntries(sections.map((s) => [String(s.id), s]));
   const classMap = Object.fromEntries(classes.map((c) => [String(c.id), c]));
@@ -79,7 +79,7 @@ function WeeklyGrid({ entries, sections, classes, subjects, teachers, rooms, onD
   // Sort each day by startTime
   Object.values(byDay).forEach((arr) => arr.sort((a, b) => String(a.startTime).localeCompare(String(b.startTime))));
 
-  if (!entries.length) return <p className="py-10 text-center text-sm text-slate-500">No timetable entries. Load demo seed or add entries.</p>;
+  if (!entries.length) return <p className="py-10 text-center text-sm text-slate-500">No timetable entries. Use Import CSV or + Add Entry to get started.</p>;
 
   return (
     <div className="overflow-x-auto">
@@ -87,7 +87,7 @@ function WeeklyGrid({ entries, sections, classes, subjects, teachers, rooms, onD
         {/* Header */}
         <div className="px-2 py-2 text-xs text-slate-500" />
         {DAYS.map((d, i) => (
-          <div key={i} className="px-2 py-2 text-xs font-semibold text-slate-400 text-center border-l border-slate-800">{d}</div>
+          <div key={d} className="px-2 py-2 text-xs font-semibold text-slate-400 text-center border-l border-slate-800">{d}</div>
         ))}
         {/* Body: collect all unique time slots */}
         {(() => {
@@ -114,7 +114,10 @@ function WeeklyGrid({ entries, sections, classes, subjects, teachers, rooms, onD
                           {sub && <div className="text-slate-400 truncate">{String(sub.name)}</div>}
                           {tch && <div className="text-slate-500 truncate">{String(tch.name)}</div>}
                           {room && <div className="text-slate-600 truncate font-mono">{String(room.roomCode)}</div>}
-                          <button onClick={() => onDelete(e.id as number)} className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-300 text-xs leading-none">&times;</button>
+                          <div className="absolute top-0.5 right-0.5 flex gap-1 opacity-0 group-hover:opacity-100">
+                            <button type="button" onClick={() => onEdit(e)} className="text-sky-400 hover:text-sky-300 text-[10px] leading-none px-0.5" title="Edit">✎</button>
+                            <button type="button" onClick={() => onDelete(e.id as number)} className="text-red-400 hover:text-red-300 text-xs leading-none px-0.5" title="Remove">&times;</button>
+                          </div>
                         </div>
                       );
                     })}
@@ -130,7 +133,7 @@ function WeeklyGrid({ entries, sections, classes, subjects, teachers, rooms, onD
 }
 
 // ─── Teacher View ─────────────────────────────────────────────────────────────
-function TeacherView({ entries, teachers, sections, subjects, rooms }: { entries: Row[]; teachers: Row[]; sections: Row[]; subjects: Row[]; rooms: Row[] }) {
+function TeacherView({ entries, teachers, sections, subjects, rooms, onEdit }: { entries: Row[]; teachers: Row[]; sections: Row[]; subjects: Row[]; rooms: Row[]; onEdit: (row: Row) => void }) {
   const [teacherId, setTeacherId] = useState('');
   const secMap = Object.fromEntries(sections.map((s) => [String(s.id), s]));
   const subMap = Object.fromEntries(subjects.map((s) => [String(s.id), s]));
@@ -146,16 +149,17 @@ function TeacherView({ entries, teachers, sections, subjects, rooms }: { entries
       {!filtered.length ? <p className="text-sm text-slate-500 py-8 text-center">No entries for selected teacher.</p> : (
         <div className="overflow-x-auto rounded-lg border border-slate-800">
           <table className="w-full text-sm">
-            <thead className="bg-slate-900 text-xs text-slate-500"><tr><th className="px-3 py-2 text-left">Day</th><th className="px-3 py-2 text-left">Time</th><th className="px-3 py-2 text-left">Section</th><th className="px-3 py-2 text-left">Subject</th><th className="px-3 py-2 text-left">Room</th><th className="px-3 py-2 text-left">Type</th></tr></thead>
+            <thead className="bg-slate-900 text-xs text-slate-500"><tr><th className="px-3 py-2 text-left">Day</th><th className="px-3 py-2 text-left">Time</th><th className="px-3 py-2 text-left">Section</th><th className="px-3 py-2 text-left">Subject</th><th className="px-3 py-2 text-left">Room</th><th className="px-3 py-2 text-left">Type</th><th className="px-3 py-2 text-left">Actions</th></tr></thead>
             <tbody>
-              {filtered.sort((a, b) => Number(a.dayOfWeek) - Number(b.dayOfWeek)).map((e, i) => (
-                <tr key={i} className="border-t border-slate-800 text-slate-300 hover:bg-slate-800/40">
+              {filtered.sort((a, b) => Number(a.dayOfWeek) - Number(b.dayOfWeek)).map((e) => (
+                <tr key={String(e.id ?? `${e.sectionId}-${e.dayOfWeek}-${e.startTime}-${e.roomId}`)} className="border-t border-slate-800 text-slate-300 hover:bg-slate-800/40">
                   <td className="px-3 py-2">{DAYS[Number(e.dayOfWeek) - 1] ?? String(e.dayOfWeek)}</td>
                   <td className="px-3 py-2 font-mono text-xs">{String(e.startTime)}–{String(e.endTime)}</td>
                   <td className="px-3 py-2">{String(secMap[String(e.sectionId)]?.name ?? e.sectionId)}</td>
                   <td className="px-3 py-2">{e.subjectId ? String(subMap[String(e.subjectId)]?.name ?? e.subjectId) : '—'}</td>
                   <td className="px-3 py-2 font-mono text-xs">{String(roomMap[String(e.roomId)]?.roomCode ?? e.roomId)}</td>
                   <td className="px-3 py-2"><Pill label={String(e.periodType)} color="slate" /></td>
+                  <td className="px-3 py-2"><button type="button" onClick={() => onEdit(e)} className="text-xs text-sky-400 hover:underline">Edit</button></td>
                 </tr>
               ))}
             </tbody>
@@ -167,7 +171,7 @@ function TeacherView({ entries, teachers, sections, subjects, rooms }: { entries
 }
 
 // ─── Room View ────────────────────────────────────────────────────────────────
-function RoomView({ entries, rooms, sections, subjects, teachers }: { entries: Row[]; rooms: Row[]; sections: Row[]; subjects: Row[]; teachers: Row[] }) {
+function RoomView({ entries, rooms, sections, subjects, teachers, onEdit }: { entries: Row[]; rooms: Row[]; sections: Row[]; subjects: Row[]; teachers: Row[]; onEdit: (row: Row) => void }) {
   const [roomId, setRoomId] = useState('');
   const secMap = Object.fromEntries(sections.map((s) => [String(s.id), s]));
   const subMap = Object.fromEntries(subjects.map((s) => [String(s.id), s]));
@@ -187,18 +191,19 @@ function RoomView({ entries, rooms, sections, subjects, teachers }: { entries: R
       {!filtered.length ? <p className="text-sm text-slate-500 py-8 text-center">No entries for selected room.</p> : (
         <div className="overflow-x-auto rounded-lg border border-slate-800">
           <table className="w-full text-sm">
-            <thead className="bg-slate-900 text-xs text-slate-500"><tr><th className="px-3 py-2 text-left">Day</th><th className="px-3 py-2 text-left">Time</th><th className="px-3 py-2 text-left">Section</th><th className="px-3 py-2 text-left">Subject</th><th className="px-3 py-2 text-left">Teacher</th><th className="px-3 py-2 text-left">Conflict</th></tr></thead>
+            <thead className="bg-slate-900 text-xs text-slate-500"><tr><th className="px-3 py-2 text-left">Day</th><th className="px-3 py-2 text-left">Time</th><th className="px-3 py-2 text-left">Section</th><th className="px-3 py-2 text-left">Subject</th><th className="px-3 py-2 text-left">Teacher</th><th className="px-3 py-2 text-left">Conflict</th><th className="px-3 py-2 text-left">Actions</th></tr></thead>
             <tbody>
-              {filtered.sort((a, b) => Number(a.dayOfWeek) - Number(b.dayOfWeek) || String(a.startTime).localeCompare(String(b.startTime))).map((e, i) => {
+              {filtered.sort((a, b) => Number(a.dayOfWeek) - Number(b.dayOfWeek) || String(a.startTime).localeCompare(String(b.startTime))).map((e) => {
                 const conflict = keyCounts[bookingKey(e)] > 1;
                 return (
-                  <tr key={i} className={`border-t border-slate-800 text-slate-300 hover:bg-slate-800/40 ${conflict ? 'bg-red-500/5' : ''}`}>
+                  <tr key={String(e.id ?? `${e.roomId}-${e.dayOfWeek}-${e.startTime}`)} className={`border-t border-slate-800 text-slate-300 hover:bg-slate-800/40 ${conflict ? 'bg-red-500/5' : ''}`}>
                     <td className="px-3 py-2">{DAYS[Number(e.dayOfWeek) - 1]}</td>
                     <td className="px-3 py-2 font-mono text-xs">{String(e.startTime)}–{String(e.endTime)}</td>
                     <td className="px-3 py-2">{String(secMap[String(e.sectionId)]?.name ?? e.sectionId)}</td>
                     <td className="px-3 py-2">{e.subjectId ? String(subMap[String(e.subjectId)]?.name ?? e.subjectId) : '—'}</td>
                     <td className="px-3 py-2">{e.teacherId ? String(tchMap[String(e.teacherId)]?.name ?? e.teacherId) : '—'}</td>
                     <td className="px-3 py-2">{conflict ? <Pill label="Double-booked" color="amber" /> : '—'}</td>
+                    <td className="px-3 py-2"><button type="button" onClick={() => onEdit(e)} className="text-xs text-sky-400 hover:underline">Edit</button></td>
                   </tr>
                 );
               })}
@@ -219,6 +224,7 @@ function SectionView({
   teachers,
   rooms,
   filterClassId,
+  onEdit,
 }: {
   entries: Row[];
   sections: Row[];
@@ -227,6 +233,7 @@ function SectionView({
   teachers: Row[];
   rooms: Row[];
   filterClassId: string;
+  onEdit: (row: Row) => void;
 }) {
   const [sectionId, setSectionId] = useState('');
   const secMap = Object.fromEntries(sections.map((s) => [String(s.id), s]));
@@ -249,16 +256,17 @@ function SectionView({
       {!filtered.length ? <p className="text-sm text-slate-500 py-8 text-center">No entries for selected section.</p> : (
         <div className="overflow-x-auto rounded-lg border border-slate-800">
           <table className="w-full text-sm">
-            <thead className="bg-slate-900 text-xs text-slate-500"><tr><th className="px-3 py-2 text-left">Day</th><th className="px-3 py-2 text-left">Time</th><th className="px-3 py-2 text-left">Subject</th><th className="px-3 py-2 text-left">Teacher</th><th className="px-3 py-2 text-left">Room</th><th className="px-3 py-2 text-left">Type</th></tr></thead>
+            <thead className="bg-slate-900 text-xs text-slate-500"><tr><th className="px-3 py-2 text-left">Day</th><th className="px-3 py-2 text-left">Time</th><th className="px-3 py-2 text-left">Subject</th><th className="px-3 py-2 text-left">Teacher</th><th className="px-3 py-2 text-left">Room</th><th className="px-3 py-2 text-left">Type</th><th className="px-3 py-2 text-left">Actions</th></tr></thead>
             <tbody>
-              {filtered.sort((a, b) => Number(a.dayOfWeek) - Number(b.dayOfWeek) || String(a.startTime).localeCompare(String(b.startTime))).map((e, i) => (
-                <tr key={i} className="border-t border-slate-800 text-slate-300 hover:bg-slate-800/40">
+              {filtered.sort((a, b) => Number(a.dayOfWeek) - Number(b.dayOfWeek) || String(a.startTime).localeCompare(String(b.startTime))).map((e) => (
+                <tr key={String(e.id ?? `${e.sectionId}-${e.dayOfWeek}-${e.startTime}-${e.roomId}`)} className="border-t border-slate-800 text-slate-300 hover:bg-slate-800/40">
                   <td className="px-3 py-2">{DAYS[Number(e.dayOfWeek) - 1]}</td>
                   <td className="px-3 py-2 font-mono text-xs">{String(e.startTime)}–{String(e.endTime)}</td>
                   <td className="px-3 py-2">{e.subjectId ? String(subMap[String(e.subjectId)]?.name ?? e.subjectId) : '—'}</td>
                   <td className="px-3 py-2">{e.teacherId ? String(tchMap[String(e.teacherId)]?.name ?? e.teacherId) : '—'}</td>
                   <td className="px-3 py-2 font-mono text-xs">{String(roomMap[String(e.roomId)]?.roomCode ?? e.roomId)}</td>
                   <td className="px-3 py-2"><Pill label={String(e.periodType)} color="slate" /></td>
+                  <td className="px-3 py-2"><button type="button" onClick={() => onEdit(e)} className="text-xs text-sky-400 hover:underline">Edit</button></td>
                 </tr>
               ))}
             </tbody>
@@ -269,8 +277,8 @@ function SectionView({
   );
 }
 
-// ─── Add Entry Sheet ──────────────────────────────────────────────────────────
-function AddEntrySheet({ open, onClose }: { open: boolean; onClose: () => void }) {
+// ─── Entry form sheet (add / edit) ─────────────────────────────────────────────
+function EntrySheet({ open, onClose, editing, allSections }: { open: boolean; onClose: () => void; editing: Row | null; allSections: Row[] }) {
   const qc = useQueryClient();
   const { data: classes = [] } = useClasses();
   const [classId, setClassId] = useState('');
@@ -281,9 +289,36 @@ function AddEntrySheet({ open, onClose }: { open: boolean; onClose: () => void }
   const [form, setForm] = useState({ sectionId: '', subjectId: '', teacherId: '', roomId: '', periodType: 'Period', dayOfWeek: '1', startTime: '08:00', endTime: '08:45' });
   const [err, setErr] = useState('');
 
+  useEffect(() => {
+    if (!open) return;
+    if (editing) {
+      const sec = allSections.find((s) => s.id === editing.sectionId);
+      setClassId(sec ? String(sec.classId) : '');
+      setForm({
+        sectionId: String(editing.sectionId ?? ''),
+        subjectId: editing.subjectId ? String(editing.subjectId) : '',
+        teacherId: editing.teacherId ? String(editing.teacherId) : '',
+        roomId: String(editing.roomId ?? ''),
+        periodType: String(editing.periodType ?? 'Period'),
+        dayOfWeek: String(editing.dayOfWeek ?? '1'),
+        startTime: String(editing.startTime ?? '08:00'),
+        endTime: String(editing.endTime ?? '08:45'),
+      });
+    } else {
+      setClassId('');
+      setForm({ sectionId: '', subjectId: '', teacherId: '', roomId: '', periodType: 'Period', dayOfWeek: '1', startTime: '08:00', endTime: '08:45' });
+    }
+    setErr('');
+  }, [editing, open, allSections]);
+
   const create = useMutation({
     mutationFn: (b: unknown) => schoolApiPost('/api/timetable', b),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['sm-timetable'] }); onClose(); setErr(''); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['sm-timetable'] }); qc.invalidateQueries({ queryKey: ['sm-setup-health'] }); onClose(); setErr(''); },
+    onError: (e: Error) => setErr(e.message),
+  });
+  const patch = useMutation({
+    mutationFn: ({ id, body }: { id: number; body: unknown }) => schoolApiPatch(`/api/timetable/${id}`, body),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['sm-timetable'] }); qc.invalidateQueries({ queryKey: ['sm-setup-health'] }); onClose(); setErr(''); },
     onError: (e: Error) => setErr(e.message),
   });
 
@@ -302,12 +337,23 @@ function AddEntrySheet({ open, onClose }: { open: boolean; onClose: () => void }
     if (!form.roomId) return setErr('Room is required');
     if (!form.startTime || !form.endTime) return setErr('Times are required');
     if (form.endTime <= form.startTime) return setErr('End time must be after start time');
-    create.mutate({ organizationId: ORG_ID, sectionId: Number(form.sectionId), subjectId: form.subjectId ? Number(form.subjectId) : undefined, teacherId: form.teacherId ? Number(form.teacherId) : undefined, roomId: Number(form.roomId), periodType: form.periodType, dayOfWeek: Number(form.dayOfWeek), startTime: form.startTime, endTime: form.endTime });
+    const body = {
+      sectionId: Number(form.sectionId),
+      subjectId: form.subjectId ? Number(form.subjectId) : undefined,
+      teacherId: form.teacherId ? Number(form.teacherId) : undefined,
+      roomId: Number(form.roomId),
+      periodType: form.periodType,
+      dayOfWeek: Number(form.dayOfWeek),
+      startTime: form.startTime,
+      endTime: form.endTime,
+    };
+    if (editing) patch.mutate({ id: editing.id as number, body });
+    else create.mutate({ organizationId: ORG_ID, ...body });
   };
 
   return (
     <Sheet open={open} onClose={onClose}>
-      <SHdr title="Add Timetable Entry" onClose={onClose} />
+      <SHdr title={editing ? 'Edit Timetable Entry' : 'Add Timetable Entry'} onClose={onClose} />
       <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
         {err && <p className="rounded bg-red-500/10 px-3 py-2 text-xs text-red-400">{err}</p>}
         <FormField label="Class"><FSelect value={classId} onChange={setClassId} options={classOpts} /></FormField>
@@ -326,7 +372,7 @@ function AddEntrySheet({ open, onClose }: { open: boolean; onClose: () => void }
       </div>
       <div className="border-t border-slate-800 px-6 py-4 flex gap-2 justify-end flex-shrink-0">
         <Button variant="outline" onClick={onClose}>Cancel</Button>
-        <Button onClick={save} disabled={create.isPending}>{create.isPending ? 'Saving…' : 'Add entry'}</Button>
+        <Button onClick={save} disabled={create.isPending || patch.isPending}>{(create.isPending || patch.isPending) ? 'Saving…' : editing ? 'Save changes' : 'Add entry'}</Button>
       </div>
     </Sheet>
   );
@@ -347,7 +393,7 @@ function ImportSheet({ open, onClose }: { open: boolean; onClose: () => void }) 
 
   const commitMut = useMutation({
     mutationFn: () => schoolApiPost('/api/timetable/validate-import', { organizationId: ORG_ID, rows, commit: true }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['sm-timetable'] }); setStep('done'); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['sm-timetable'] }); qc.invalidateQueries({ queryKey: ['sm-setup-health'] }); setStep('done'); },
   });
 
   const parseFile = (file: File) => {
@@ -437,7 +483,10 @@ function ImportSheet({ open, onClose }: { open: boolean; onClose: () => void }) 
                   </thead>
                   <tbody>
                     {validation.resolvedPreview.slice(0, 15).map((r, i) => (
-                      <tr key={i} className="border-t border-slate-800 text-slate-400">
+                      <tr
+                        key={`${r.className}|${r.sectionName}|${r.dayOfWeek}|${r.startTime}|${r.roomCode}|${i}`}
+                        className="border-t border-slate-800 text-slate-400"
+                      >
                         <td className="px-2 py-1">{String(r.className)}</td>
                         <td className="px-2 py-1">{String(r.sectionName)}</td>
                         <td className="px-2 py-1">{String(r.subjectName)}</td>
@@ -479,7 +528,8 @@ export default function TimetablePage() {
   const { data: teachers = [] } = useTeachers();
   const { data: rooms = [] } = useRooms();
   const [view, setView] = useState<ViewMode>('weekly');
-  const [addOpen, setAddOpen] = useState(false);
+  const [entryOpen, setEntryOpen] = useState(false);
+  const [editingEntry, setEditingEntry] = useState<Row | null>(null);
   const [importOpen, setImportOpen] = useState(false);
 
   const entries: Row[] = Array.isArray(data) ? data : [];
@@ -510,26 +560,7 @@ export default function TimetablePage() {
 
   const deactivate = useMutation({
     mutationFn: (id: number) => schoolApiDelete(`/api/timetable/${id}`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['sm-timetable'] }),
-  });
-
-  const loadSample = useMutation({
-    mutationFn: () =>
-      schoolApiPost<{ created: number; sections: string[]; hint: string }>(
-        '/api/timetable/seed-sample',
-        { organizationId: ORG_ID, replaceExisting: true },
-      ),
-    onSuccess: (res) => {
-      qc.invalidateQueries({ queryKey: ['sm-timetable'] });
-      setFilterClassId('');
-      setFilterSectionId('');
-      const msg = [
-        `Loaded ${res.created} sample periods for: ${res.sections.join(', ')}.`,
-        res.hint,
-      ].join(' ');
-      window.alert(msg);
-    },
-    onError: (e: Error) => window.alert(e.message || 'Could not load sample'),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['sm-timetable'] }); qc.invalidateQueries({ queryKey: ['sm-setup-health'] }); },
   });
 
   const viewOpts: { id: ViewMode; label: string }[] = [
@@ -546,43 +577,21 @@ export default function TimetablePage() {
         subtitle="Class schedules mapped to rooms and teachers. Overlap detection included."
         action={
           <div className="flex flex-wrap gap-2 justify-end">
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={loadSample.isPending}
-              onClick={() => {
-                if (
-                  entries.length > 0 &&
-                  !window.confirm(
-                    'This replaces all timetable entries with a small sample (Grade 1 A/B, Grade 2 A). Continue?',
-                  )
-                ) {
-                  return;
-                }
-                loadSample.mutate();
-              }}
-            >
-              {loadSample.isPending ? (
-                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-              ) : null}
-              {loadSample.isPending ? 'Loading…' : 'Load sample schedule'}
-            </Button>
             <Button size="sm" variant="outline" onClick={() => setImportOpen(true)}>Import CSV</Button>
-            <Button size="sm" onClick={() => setAddOpen(true)}>+ Add Entry</Button>
+            <Button size="sm" onClick={() => { setEditingEntry(null); setEntryOpen(true); }}>+ Add Entry</Button>
           </div>
         }
       />
 
       {!isLoading && entries.length === 0 && (
         <div className="rounded-lg border border-amber-900/50 bg-amber-950/20 px-4 py-3 text-sm text-amber-100/90">
-          <p className="font-medium text-amber-100">No timetable yet</p>
+          <p className="font-medium text-amber-100">No timetable entries yet</p>
           <p className="mt-1 text-xs text-amber-200/70">
-            1) On <strong>Master Data</strong>, click <strong>Seed demo data</strong> (creates Grade 1–10, sections A/B/C, teachers, rooms).
-            2) Return here and click <strong>Load sample schedule</strong> for a readable week (60 periods across 3 sections).
-            Or use <strong>Import CSV</strong> with the{' '}
+            Add entries manually using <strong>+ Add Entry</strong>, or use <strong>Import CSV</strong> with the{' '}
             <a href="/samples/timetable-sample.csv" className="underline" download>
               sample file
             </a>.
+            Ensure classes, sections, teachers, and rooms are configured in <strong>Master Data</strong> first.
           </p>
         </div>
       )}
@@ -674,6 +683,7 @@ export default function TimetablePage() {
                 teachers={Array.isArray(teachers) ? teachers : []}
                 rooms={Array.isArray(rooms) ? rooms : []}
                 onDelete={(id) => deactivate.mutate(id)}
+                onEdit={(row) => { setEditingEntry(row); setEntryOpen(true); }}
               />
             </div>
           )}
@@ -687,6 +697,7 @@ export default function TimetablePage() {
                 teachers={Array.isArray(teachers) ? teachers : []}
                 rooms={Array.isArray(rooms) ? rooms : []}
                 filterClassId={filterClassId}
+                onEdit={(row) => { setEditingEntry(row); setEntryOpen(true); }}
               />
             </div>
           )}
@@ -698,6 +709,7 @@ export default function TimetablePage() {
                 sections={allSec}
                 subjects={Array.isArray(subjects) ? subjects : []}
                 rooms={Array.isArray(rooms) ? rooms : []}
+                onEdit={(row) => { setEditingEntry(row); setEntryOpen(true); }}
               />
             </div>
           )}
@@ -709,13 +721,19 @@ export default function TimetablePage() {
                 sections={allSec}
                 subjects={Array.isArray(subjects) ? subjects : []}
                 teachers={Array.isArray(teachers) ? teachers : []}
+                onEdit={(row) => { setEditingEntry(row); setEntryOpen(true); }}
               />
             </div>
           )}
         </div>
       )}
 
-      <AddEntrySheet open={addOpen} onClose={() => setAddOpen(false)} />
+      <EntrySheet
+        open={entryOpen}
+        onClose={() => { setEntryOpen(false); setEditingEntry(null); }}
+        editing={editingEntry}
+        allSections={allSec}
+      />
       <ImportSheet open={importOpen} onClose={() => setImportOpen(false)} />
     </div>
   );

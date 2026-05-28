@@ -9,9 +9,14 @@ export async function GET(req: NextRequest) {
   const organizationId = Number(req.nextUrl.searchParams.get('organizationId') ?? 1);
   const siteIdRaw = req.nextUrl.searchParams.get('siteId');
   const siteId = siteIdRaw ? Number(siteIdRaw) : undefined;
-  const mem = listRecommendations(organizationId, date, siteId);
-  if (mem.length > 0 || !isDbEnabled()) {
-    return json({ organizationId, date, siteId, recommendations: mem });
+  if (!isDbEnabled()) {
+    return json({
+      organizationId,
+      date,
+      siteId,
+      recommendations: listRecommendations(organizationId, date, siteId),
+      source: 'memory' as const,
+    });
   }
   const r = await dbQuery<{
     id: number;
@@ -50,5 +55,5 @@ export async function GET(req: NextRequest) {
     citations: row.citations ?? [],
     createdAt: row.created_at,
   }));
-  return json({ organizationId, date, siteId, recommendations });
+  return json({ organizationId, date, siteId, recommendations, source: 'postgres' as const });
 }

@@ -225,6 +225,7 @@ function UploadCalendarSheet({ open, onClose }: { open: boolean; onClose: () => 
       const data = await res.json() as { count?: number };
       setImportResult({ count: data.count ?? editedEvents.length });
       void qc.invalidateQueries({ queryKey: ['sm-calendar'] });
+      void qc.invalidateQueries({ queryKey: ['sm-setup-health'] });
     } finally {
       setImporting(false);
     }
@@ -499,7 +500,7 @@ function DaySheet({ open, onClose, date, existing }: { open: boolean; onClose: (
   useState(() => { setForm({ dayType: String(existing?.dayType ?? 'WorkingDay'), label: String(existing?.label ?? '') }); });
   const create = useMutation({
     mutationFn: (b: unknown) => schoolApiPost('/api/school-calendar', b),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['sm-calendar'] }); onClose(); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['sm-calendar'] }); qc.invalidateQueries({ queryKey: ['sm-setup-health'] }); onClose(); },
   });
   const set = (k: string) => (v: string) => setForm((f) => ({ ...f, [k]: v }));
   return (
@@ -550,7 +551,7 @@ function BulkHolidaySheet({ open, onClose }: { open: boolean; onClose: () => voi
 
   const bulk = useMutation({
     mutationFn: (days: unknown[]) => schoolApiPost('/api/school-calendar/bulk', { days }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['sm-calendar'] }); onClose(); setErr(''); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['sm-calendar'] }); qc.invalidateQueries({ queryKey: ['sm-setup-health'] }); onClose(); setErr(''); },
     onError: (e: Error) => setErr(e.message),
   });
 
@@ -688,11 +689,11 @@ export default function CalendarPage() {
             <tbody>
               {[...calendar]
                 .sort((a, b) => String(a.calendarDate).localeCompare(String(b.calendarDate)))
-                .map((c, i) => {
+                .map((c) => {
                   const dt  = c.dayType as DayType;
                   const col = DAY_COLORS[dt] ?? DAY_COLORS.WorkingDay;
                   return (
-                    <tr key={i} className="border-t border-slate-800 text-slate-300 hover:bg-slate-800/40">
+                    <tr key={String(c.id ?? c.calendarDate)} className="border-t border-slate-800 text-slate-300 hover:bg-slate-800/40">
                       <td className="px-3 py-2 font-mono text-xs">{String(c.calendarDate)}</td>
                       <td className="px-3 py-2">
                         <span className={`inline-flex rounded px-1.5 py-0.5 text-xs font-medium ${col.bg} ${col.text}`}>{dt}</span>

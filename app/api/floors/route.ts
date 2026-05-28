@@ -1,14 +1,17 @@
 import '@/lib/school-persistence/init';
 import { NextRequest } from 'next/server';
 import { json, err } from '@/lib/school-foundation/json';
-import { createFloor, listFloors, DbDisabledError } from '@/lib/school-foundation/repos';
+import { createFloor, listFloors, listFloorsForOrganization, DbDisabledError } from '@/lib/school-foundation/repos';
 import { ensureFoundationHydrated } from '@/lib/school-db/hydrate';
 
 export async function GET(req: NextRequest) {
   await ensureFoundationHydrated();
   try {
+    const organizationId = req.nextUrl.searchParams.get('organizationId');
     const buildingId = req.nextUrl.searchParams.get('buildingId');
-    const rows = await listFloors(buildingId ? Number(buildingId) : undefined);
+    const rows = organizationId
+      ? await listFloorsForOrganization(Number(organizationId))
+      : await listFloors(buildingId ? Number(buildingId) : undefined);
     return json(rows);
   } catch (e) {
     if (e instanceof DbDisabledError) return err(e.message, 503);

@@ -4,14 +4,32 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 const ORG = 1;
 
+export function useSchoolRuntimeMode() {
+  return useQuery({
+    queryKey: ['school-runtime-mode'],
+    queryFn: async () => {
+      const res = await schoolFetch('/api/school-db/status');
+      if (!res.ok) throw new Error('Failed');
+      const data = (await res.json()) as { demoUi?: { enabled?: boolean } };
+      return { demoUiEnabled: data.demoUi?.enabled !== false };
+    },
+    staleTime: 60_000,
+  });
+}
+
 export function useSetupHealth() {
   return useQuery({
     queryKey: ['sm-setup-health', ORG],
     queryFn: async () => {
       const res = await schoolFetch(`/api/school-management/setup-health?organizationId=${ORG}`);
-      if (!res.ok) throw new Error('Failed');
-      return res.json();
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error((body as { error?: string }).error ?? 'Failed to load setup health');
+      }
+      return body;
     },
+    staleTime: 15_000,
+    refetchOnWindowFocus: true,
   });
 }
 
@@ -29,6 +47,7 @@ export function useSeedDemo() {
       void qc.invalidateQueries({ queryKey: ['sm-sites'] });
       void qc.invalidateQueries({ queryKey: ['sm-buildings-all'] });
       void qc.invalidateQueries({ queryKey: ['sm-floors-all'] });
+      void qc.invalidateQueries({ queryKey: ['sm-zones'] });
       void qc.invalidateQueries({ queryKey: ['sm-zones-all'] });
       void qc.invalidateQueries({ queryKey: ['sm-rooms'] });
       void qc.invalidateQueries({ queryKey: ['sm-classes'] });

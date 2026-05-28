@@ -3,6 +3,8 @@ import { listEvents } from '../school-rule-engine/store';
 import { db } from '../school-foundation/store';
 import { mapEventToContext } from './context';
 import { persistDailyAggregation } from '../school-db/persist-daily';
+import { loadDailyAggregationFromPg } from '../school-db/load-daily';
+import { isDbEnabled } from '../school-db/pool';
 import type {
   ClassroomDailyRow,
   ComplianceDailyRow,
@@ -406,6 +408,29 @@ export function aggregateDay(organizationId: number, date: string, siteId?: numb
   };
   void persistDailyAggregation(organizationId, date);
   return result;
+}
+
+/** Aggregate in-memory and await Postgres persistence (when DB enabled). */
+export async function aggregateDayPersisted(organizationId: number, date: string, siteId?: number) {
+  const result = aggregateDay(organizationId, date, siteId);
+  if (!('skipped' in result && result.skipped) && isDbEnabled()) {
+    await persistDailyAggregation(organizationId, date);
+  }
+  return result;
+}
+
+export function hasDailySummariesForDate(organizationId: number, date: string, siteId?: number) {
+  return rowsForModule('teacher', organizationId, date, siteId).length > 0;
+}
+
+/** Hydrate Phase 4 daily rows from Postgres when memory is empty for this date. */
+export async function ensureDailySummariesForDate(organizationId: number, date: string, siteId?: number) {
+  if (hasDailySummariesForDate(organizationId, date, siteId)) {
+    return { source: 'memory' as const };
+  }
+  if (!isDbEnabled()) return { source: 'none' as const };
+  const loaded = await loadDailyAggregationFromPg(organizationId, date, dailyDb);
+  return { source: loaded ? ('postgres' as const) : ('none' as const) };
 }
 
 function headlineFromRows(rows: { metrics: Record<string, unknown>; facts: SummaryFact[] }[]): ModuleOverviewSlice {

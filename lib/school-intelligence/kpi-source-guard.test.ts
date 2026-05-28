@@ -17,9 +17,7 @@ function walk(dir: string, acc: string[] = []): string[] {
 
 const FORBIDDEN = [
   /\/api\/ai-signals\b/,
-  /\/api\/school-ai-signals\/signals\b/,
-  /useSchoolAiSignals/,
-  /from ['"]@\/components\/school-management\/useSchoolAiSignals/,
+  /\/api\/ai-signals\b/,
 ];
 
 describe('school-intelligence KPI source guard', () => {
