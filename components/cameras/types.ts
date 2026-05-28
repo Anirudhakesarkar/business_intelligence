@@ -1,0 +1,30 @@
+export const CAMERA_TYPES = ['IP Camera','Analog Camera','Wi-Fi Camera','PTZ Camera','Thermal Camera','ANPR Camera','Dome Camera','Bullet Camera','Other'] as const;
+export const CAMERA_STATUSES = ['Draft','Active','Offline','Disabled','Maintenance','Decommissioned'] as const;
+export const STREAM_TYPES = ['Mainstream','Substream','Auto'] as const;
+export const PROTOCOLS = ['RTSP','ONVIF','HTTP','Vendor SDK','Other'] as const;
+export const CODECS = ['H.264','H.265','MJPEG','Unknown'] as const;
+export const AREA_CATEGORIES = ['Entrance / Exit','Reception','Lobby','Classroom','Corridor','Playground','Parking','Boundary Wall','Gate','Production Line','Warehouse Zone','Loading / Unloading Area','Cash Counter','Server Room','Restricted Area','Office Floor','Waiting Area','Canteen','Other'] as const;
+export const BUSINESS_FUNCTIONS = ['Safety Monitoring','Security Monitoring','Operations Monitoring','Productivity Monitoring','Compliance Monitoring','Customer Experience','Workforce Monitoring','Asset Protection','Traffic / Movement Flow','Emergency Response'] as const;
+export const AREA_IMPORTANCE = ['Normal','Important','Critical'] as const;
+
+export type CameraRecord = {
+  id: string;
+  organization_id: string;
+  organization_name?: string;
+  site_id: string;
+  site_name?: string;
+  edge_server_id: string;
+  edge_server_name?: string;
+  camera_name: string;
+  camera_code: string;
+  camera_status: (typeof CAMERA_STATUSES)[number];
+  camera_type: string;
+  camera_location_area: string;
+  stream_type: string;
+  camera_online: boolean | null;
+  online_status?: 'online' | 'offline';
+  last_frame_received_time: string | null;
+  stream_health: string | null;
+  last_snapshot_url: string | null;
+  remarks: string | null;
+};

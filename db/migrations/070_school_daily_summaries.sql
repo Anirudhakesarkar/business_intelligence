@@ -1,0 +1,140 @@
+-- Migration 070: School Intelligence Phase 4 Daily Summaries
+
+CREATE TABLE IF NOT EXISTS school_teacher_daily_intelligence (
+  id BIGSERIAL PRIMARY KEY,
+  organization_id BIGINT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  site_id BIGINT,
+  summary_date DATE NOT NULL,
+  teacher_id BIGINT,
+  metrics JSONB NOT NULL DEFAULT '{}',
+  facts JSONB NOT NULL DEFAULT '[]',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_daily_uq ON school_teacher_daily_intelligence (organization_id, COALESCE(site_id,0), summary_date, COALESCE(teacher_id,0));
+CREATE INDEX IF NOT EXISTS idx_daily_date ON school_teacher_daily_intelligence (organization_id, summary_date);
+
+CREATE TABLE IF NOT EXISTS school_classroom_daily_intelligence (
+  id BIGSERIAL PRIMARY KEY,
+  organization_id BIGINT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  site_id BIGINT,
+  summary_date DATE NOT NULL,
+  room_id BIGINT, class_id BIGINT, section_id BIGINT,
+  metrics JSONB NOT NULL DEFAULT '{}',
+  facts JSONB NOT NULL DEFAULT '[]',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_daily_uq ON school_classroom_daily_intelligence (organization_id, COALESCE(site_id,0), summary_date, COALESCE(room_id,0), COALESCE(class_id,0));
+CREATE INDEX IF NOT EXISTS idx_daily_date ON school_classroom_daily_intelligence (organization_id, summary_date);
+
+CREATE TABLE IF NOT EXISTS school_student_occupancy_daily (
+  id BIGSERIAL PRIMARY KEY,
+  organization_id BIGINT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  site_id BIGINT,
+  summary_date DATE NOT NULL,
+  room_id BIGINT, zone_id BIGINT,
+  metrics JSONB NOT NULL DEFAULT '{}',
+  facts JSONB NOT NULL DEFAULT '[]',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_occupancy_uq ON school_student_occupancy_daily (organization_id, COALESCE(site_id,0), summary_date, COALESCE(room_id,0));
+CREATE INDEX IF NOT EXISTS idx_occupancy_date ON school_student_occupancy_daily (organization_id, summary_date);
+
+CREATE TABLE IF NOT EXISTS school_process_daily_intelligence (
+  id BIGSERIAL PRIMARY KEY,
+  organization_id BIGINT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  site_id BIGINT,
+  summary_date DATE NOT NULL,
+  time_window TEXT,
+  metrics JSONB NOT NULL DEFAULT '{}',
+  facts JSONB NOT NULL DEFAULT '[]',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_daily_uq ON school_process_daily_intelligence (organization_id, COALESCE(site_id,0), summary_date, COALESCE(time_window,''));
+CREATE INDEX IF NOT EXISTS idx_daily_date ON school_process_daily_intelligence (organization_id, summary_date);
+
+CREATE TABLE IF NOT EXISTS school_staff_deployment_daily (
+  id BIGSERIAL PRIMARY KEY,
+  organization_id BIGINT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  site_id BIGINT,
+  summary_date DATE NOT NULL,
+  zone_id BIGINT, duty_role TEXT,
+  metrics JSONB NOT NULL DEFAULT '{}',
+  facts JSONB NOT NULL DEFAULT '[]',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_deployment_uq ON school_staff_deployment_daily (organization_id, COALESCE(site_id,0), summary_date, COALESCE(zone_id,0), COALESCE(duty_role,''));
+CREATE INDEX IF NOT EXISTS idx_deployment_date ON school_staff_deployment_daily (organization_id, summary_date);
+
+CREATE TABLE IF NOT EXISTS school_space_utilization_daily (
+  id BIGSERIAL PRIMARY KEY,
+  organization_id BIGINT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  site_id BIGINT,
+  summary_date DATE NOT NULL,
+  room_id BIGINT,
+  metrics JSONB NOT NULL DEFAULT '{}',
+  facts JSONB NOT NULL DEFAULT '[]',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_utilization_uq ON school_space_utilization_daily (organization_id, COALESCE(site_id,0), summary_date, COALESCE(room_id,0));
+CREATE INDEX IF NOT EXISTS idx_utilization_date ON school_space_utilization_daily (organization_id, summary_date);
+
+CREATE TABLE IF NOT EXISTS school_discipline_daily_intelligence (
+  id BIGSERIAL PRIMARY KEY,
+  organization_id BIGINT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  site_id BIGINT,
+  summary_date DATE NOT NULL,
+  zone_id BIGINT,
+  metrics JSONB NOT NULL DEFAULT '{}',
+  facts JSONB NOT NULL DEFAULT '[]',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_daily_uq ON school_discipline_daily_intelligence (organization_id, COALESCE(site_id,0), summary_date, COALESCE(zone_id,0));
+CREATE INDEX IF NOT EXISTS idx_daily_date ON school_discipline_daily_intelligence (organization_id, summary_date);
+
+CREATE TABLE IF NOT EXISTS school_parent_experience_daily (
+  id BIGSERIAL PRIMARY KEY,
+  organization_id BIGINT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  site_id BIGINT,
+  summary_date DATE NOT NULL,
+  
+  metrics JSONB NOT NULL DEFAULT '{}',
+  facts JSONB NOT NULL DEFAULT '[]',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_experience_uq ON school_parent_experience_daily (organization_id, COALESCE(site_id,0), summary_date);
+CREATE INDEX IF NOT EXISTS idx_experience_date ON school_parent_experience_daily (organization_id, summary_date);
+
+CREATE TABLE IF NOT EXISTS school_compliance_daily_intelligence (
+  id BIGSERIAL PRIMARY KEY,
+  organization_id BIGINT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  site_id BIGINT,
+  summary_date DATE NOT NULL,
+  
+  metrics JSONB NOT NULL DEFAULT '{}',
+  facts JSONB NOT NULL DEFAULT '[]',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_daily_uq ON school_compliance_daily_intelligence (organization_id, COALESCE(site_id,0), summary_date);
+CREATE INDEX IF NOT EXISTS idx_daily_date ON school_compliance_daily_intelligence (organization_id, summary_date);
+
+CREATE TABLE IF NOT EXISTS school_daily_score_inputs (
+  id BIGSERIAL PRIMARY KEY,
+  organization_id BIGINT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  site_id BIGINT,
+  summary_date DATE NOT NULL,
+  inputs_json JSONB NOT NULL DEFAULT '{}',
+  facts JSONB NOT NULL DEFAULT '[]',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_score_inputs_uq ON school_daily_score_inputs (organization_id, COALESCE(site_id, 0), summary_date);
+CREATE INDEX IF NOT EXISTS idx_score_inputs_date ON school_daily_score_inputs (organization_id, summary_date);

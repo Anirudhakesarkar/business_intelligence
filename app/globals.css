@@ -1,0 +1,76 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 222 47% 4%;
+    --foreground: 210 40% 98%;
+    --card: 222 47% 6%;
+    --card-foreground: 210 40% 98%;
+    --primary: 217 91% 60%;
+    --primary-foreground: 210 40% 98%;
+    --muted: 217 33% 17%;
+    --muted-foreground: 215 20% 55%;
+    --border: 217 33% 17%;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  html {
+    height: 100%;
+    overflow-y: auto;
+  }
+
+  body {
+    @apply min-h-full bg-slate-950 text-slate-100 antialiased;
+    font-feature-settings: "rlig" 1, "calt" 1;
+    overflow-y: auto;
+  }
+}
+
+/* Legacy class names for existing pages until fully migrated */
+.container {
+  @apply max-w-6xl mx-auto px-4 py-6;
+}
+.card {
+  @apply bg-slate-900 rounded-lg border border-slate-800 p-6 shadow;
+}
+.error {
+  @apply bg-red-500/10 text-red-400 border border-red-500/30 rounded-md px-4 py-2 text-sm;
+}
+.loading, .empty {
+  @apply text-slate-400 py-8 text-center;
+}
+.badge {
+  @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium;
+}
+.badge-ok { @apply bg-green-500/20 text-green-400; }
+.badge-warn { @apply bg-yellow-500/20 text-yellow-400; }
+.badge-critical { @apply bg-red-500/20 text-red-400; }
+.badge-offline { @apply bg-slate-500/20 text-slate-400; }
+.badge-online { @apply bg-green-500/20 text-green-400; }
+
+/* Dark-themed scrollbars for dashboard panels (e.g. AI Server Health fleet list) */
+@layer utilities {
+  .panel-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(51 65 85) rgb(15 23 42);
+  }
+  .panel-scroll::-webkit-scrollbar {
+    width: 6px;
+  }
+  .panel-scroll::-webkit-scrollbar-track {
+    background: rgb(15 23 42);
+    border-radius: 3px;
+  }
+  .panel-scroll::-webkit-scrollbar-thumb {
+    background: rgb(51 65 85);
+    border-radius: 3px;
+  }
+  .panel-scroll::-webkit-scrollbar-thumb:hover {
+    background: rgb(71 85 105);
+  }
+}
