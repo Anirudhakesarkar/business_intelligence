@@ -5,13 +5,14 @@ import { Button } from '@/components/ui/button';
 import { Settings, LogOut, Menu } from 'lucide-react';
 import { useAuth } from '@/app/providers/auth-provider';
 import { NotificationBell } from './notification-bell';
+import { HeaderPageTitle } from './header-page-title';
 
 export function Header({ onMenuClick }: { onMenuClick?: () => void }) {
-  const { user, config, logout } = useAuth();
+  const { user, logout } = useAuth();
 
   return (
     <header className="sticky top-0 z-30 flex h-14 items-center gap-4 border-b border-slate-800 bg-slate-950/80 px-4 backdrop-blur sm:px-6">
-      <div className="flex flex-1 items-center gap-4">
+      <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-4">
         {onMenuClick && (
           <Button
             variant="ghost"
@@ -23,9 +24,7 @@ export function Header({ onMenuClick }: { onMenuClick?: () => void }) {
             <Menu className="h-5 w-5" />
           </Button>
         )}
-        <span className="truncate text-sm text-slate-400">
-          {config?.siteId ? `Site: ${config.siteId}` : 'Not configured'}
-        </span>
+        <HeaderPageTitle />
       </div>
       <div className="flex items-center gap-2">
         {user && (

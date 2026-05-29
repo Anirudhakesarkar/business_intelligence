@@ -1,6 +1,8 @@
 'use client';
 
 import type { ReactNode } from 'react';
+import { usePathname } from 'next/navigation';
+import { isSchoolIntelligencePath } from '@/lib/layout/page-header-routes';
 import { SIModuleHeader } from './SIModuleHeader';
 import { SchoolIntelligenceBreadcrumbs } from './SchoolIntelligenceBreadcrumbs';
 
@@ -40,19 +42,28 @@ export function SIPageShell({
   eyebrow,
   children,
 }: Props) {
+  const pathname = usePathname();
+  const useStickyHeader = isSchoolIntelligencePath(pathname);
+
   return (
     <div className="space-y-7">
       <div className="space-y-4">
         <SchoolIntelligenceBreadcrumbs current={currentCrumb ?? title} parent={parentCrumb} />
         {banner}
-        <SIModuleHeader
-          title={title}
-          description={description}
-          icon={icon}
-          tone={tone}
-          eyebrow={eyebrow}
-          actions={actions}
-        />
+        {useStickyHeader ? (
+          actions ? (
+            <div className="flex flex-wrap items-center justify-end gap-2">{actions}</div>
+          ) : null
+        ) : (
+          <SIModuleHeader
+            title={title}
+            description={description}
+            icon={icon}
+            tone={tone}
+            eyebrow={eyebrow}
+            actions={actions}
+          />
+        )}
       </div>
       <div className="space-y-6">{children}</div>
     </div>

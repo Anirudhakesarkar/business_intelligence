@@ -2,7 +2,9 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
-import { ArrowLeft, Loader2, Save } from 'lucide-react';
+import { Loader2, Save } from 'lucide-react';
+import { usePageHeaderRefresh } from '@/components/layout/page-header-context';
+import { SchoolIntelligenceBreadcrumbs } from '@/components/school-intelligence/SchoolIntelligenceBreadcrumbs';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { DEFAULT_WEIGHTS, MODULE_LABELS } from '@/lib/school-score-engine/weights';
@@ -51,6 +53,8 @@ export default function ScoreSettingsPage() {
     void load();
   }, [load]);
 
+  usePageHeaderRefresh(load);
+
   const sumPct = Math.round(Object.values(weights).reduce((a, b) => a + b, 0) * 100);
 
   async function save() {
@@ -82,10 +86,7 @@ export default function ScoreSettingsPage() {
 
   return (
     <div className="space-y-6">
-      <Link href="/dashboard/school-intelligence" className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-sky-400">
-        <ArrowLeft className="h-4 w-4" /> Back
-      </Link>
-      <h1 className="text-xl font-semibold text-slate-100">Rules & Score Settings</h1>
+      <SchoolIntelligenceBreadcrumbs current="Score Settings" />
       <p className="text-sm text-slate-400">
         Weight profiles are versioned — saving creates a new profile without rewriting historical scores.
         {isMvp3ScoresOnlyClient() && ' MVP3 mode: overall uses Teacher, Occupancy, Academic, and Parent only.'}

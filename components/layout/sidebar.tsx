@@ -175,8 +175,7 @@ const navSections: NavSection[] = [
     icon: GraduationCap,
     items: [
       { href: '/dashboard/school-intelligence', label: 'Overview' },
-      { href: '/dashboard/school-intelligence/master-data', label: 'Master Data Setup' },
-      { href: '/dashboard/school-intelligence/overall-score', label: 'Overall School Score' },
+      { href: '/dashboard/school-intelligence/vision-copilot', label: 'Vision Copilot' },
       { href: '/dashboard/school-intelligence/campus-safety', label: 'Campus Safety' },
       { href: '/dashboard/school-intelligence/teacher-productivity', label: 'Teacher Productivity' },
       { href: '/dashboard/school-intelligence/teacher-supervision', label: 'Teacher Supervision' },

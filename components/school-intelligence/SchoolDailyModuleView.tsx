@@ -1,7 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { usePageHeaderRefresh } from '@/components/layout/page-header-context';
 import { Loader2, AlertTriangle, ArrowRight, Sparkles } from 'lucide-react';
 import { SIPageShell } from '@/components/school-intelligence/SIPageShell';
 import { SIKPICard } from '@/components/school-intelligence/SIKPICard';
@@ -126,6 +127,14 @@ export function SchoolDailyModuleView({
   useEffect(() => {
     setAggregateNote(null);
   }, [date, module]);
+
+  const handleRefresh = useCallback(() => {
+    void primary.reload();
+    if (secondaryModule) void secondary.reload();
+    void scores.reload();
+  }, [primary, secondary, secondaryModule, scores]);
+
+  usePageHeaderRefresh(handleRefresh);
 
   return (
     <SIPageShell

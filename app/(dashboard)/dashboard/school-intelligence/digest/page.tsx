@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { SMPageHeader } from '@/components/school-management/SMPageHeader';
+import { SchoolIntelligenceBreadcrumbs } from '@/components/school-intelligence/SchoolIntelligenceBreadcrumbs';
 import { SchoolCopilotPanel } from '@/components/school-intelligence/SchoolCopilotPanel';
 import { SchoolCopilotQA } from '@/components/school-intelligence/SchoolCopilotQA';
 import { SchoolRecommendationsStrip } from '@/components/school-intelligence/SchoolRecommendationsStrip';
@@ -36,10 +36,7 @@ export default function DigestPage() {
 
   return (
     <div className="space-y-6">
-      <SMPageHeader
-        title="Daily Principal Digest"
-        subtitle="GPT-generated school intelligence summary, Q&A copilot, and action recommendations."
-      />
+      <SchoolIntelligenceBreadcrumbs current="Daily Digest" />
 
       {/* Date navigator */}
       <div className="flex items-center gap-3">

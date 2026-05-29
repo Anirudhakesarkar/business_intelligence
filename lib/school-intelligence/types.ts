@@ -1,9 +1,13 @@
-export type SIDateRange = '24h' | '7d' | '30d';
+export type SIDateRange = '24h' | '7d' | '30d' | 'custom';
 
 export type SIFilters = {
   organizationId: string;
   siteId: string;
   dateRange: SIDateRange;
+  /** Inclusive start (YYYY-MM-DD); used when `dateRange` is `custom`. */
+  dateFrom?: string;
+  /** Inclusive end (YYYY-MM-DD); used when `dateRange` is `custom`. */
+  dateTo?: string;
 };
 
 export type SchoolZoneType =

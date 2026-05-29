@@ -3,7 +3,6 @@ import { injectDemoAuth } from './helpers/auth';
 
 const INTELLIGENCE_ROUTES = [
   { path: '/dashboard/school-intelligence', heading: 'School Intelligence' },
-  { path: '/dashboard/school-intelligence/overall-score', heading: 'Overall School Score' },
   { path: '/dashboard/school-intelligence/actions', heading: 'GPT Action Tasks' },
   { path: '/dashboard/school-intelligence/teacher-productivity', heading: 'Teacher Productivity Intelligence' },
   { path: '/dashboard/school-intelligence/student-occupancy', heading: 'Student Occupancy Intelligence' },
@@ -49,6 +48,6 @@ test.describe('School Intelligence — Phases 2–6 UI', () => {
   test('sidebar lists School Intelligence section', async ({ page }) => {
     await page.goto('/dashboard/school-intelligence');
     await expect(page.getByText('12. School Intelligence')).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Overall School Score' }).first()).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Overview' }).first()).toBeVisible();
   });
 });

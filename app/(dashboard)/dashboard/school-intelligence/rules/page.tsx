@@ -1,14 +1,14 @@
 'use client';
 
-import { useState, useMemo } from 'react';
-import { SMPageHeader } from '@/components/school-management/SMPageHeader';
+import { useCallback, useState, useMemo } from 'react';
 import { SchoolIntelligenceBreadcrumbs } from '@/components/school-intelligence/SchoolIntelligenceBreadcrumbs';
+import { usePageHeaderRefresh } from '@/components/layout/page-header-context';
 import { RuleEditSheet } from '@/components/school-intelligence/RuleEditSheet';
 import { useIntelligenceRules, useSeedRuleEngine } from '@/components/school-intelligence/useSchoolRuleEngine';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { useQueryClient } from '@tanstack/react-query';
-import { RefreshCw, ShieldCheck, ToggleLeft, ToggleRight, Filter, Clock } from 'lucide-react';
+import { ShieldCheck, ToggleLeft, ToggleRight, Filter, Clock } from 'lucide-react';
 
 type IntelligenceRule = {
   id: number;
@@ -115,19 +115,20 @@ export default function RulesConfigPage() {
     return g;
   }, [allRules]);
 
+  const handleRefresh = useCallback(() => {
+    void refetch();
+  }, [refetch]);
+
+  usePageHeaderRefresh(handleRefresh);
+
   return (
     <div className="space-y-6">
       <SchoolIntelligenceBreadcrumbs current="Rules" />
-      <SMPageHeader title="Intelligence Rules" subtitle="Rule catalog — enable/disable rules and review detection thresholds." />
 
-      {/* Actions */}
       <div className="flex gap-2">
         <Button size="sm" onClick={() => seed.mutate()} disabled={seed.isPending}>
           <ShieldCheck className="mr-1 h-3 w-3" />
           {seed.isPending ? 'Seeding…' : 'Seed default rules'}
-        </Button>
-        <Button size="sm" variant="outline" onClick={() => refetch()}>
-          <RefreshCw className="mr-1 h-3 w-3" /> Refresh
         </Button>
       </div>
 

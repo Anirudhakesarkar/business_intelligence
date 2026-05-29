@@ -5,8 +5,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Sheet } from '@/components/ui/sheet';
 import { SMPageHeader } from '@/components/school-management/SMPageHeader';
+import { SMFilterSelect } from '@/components/school-management/SMFilterBar';
 import { schoolApiGet, schoolApiPost } from '@/lib/school-management/api';
-import { Upload, FileText, AlertTriangle, CheckCircle2, X, Loader2, ChevronDown, ChevronUp } from 'lucide-react';
+import { Upload, FileText, AlertTriangle, CheckCircle2, X, Loader2, ChevronDown, ChevronUp, SlidersHorizontal, Tag } from 'lucide-react';
 
 const ORG_ID = 1;
 type Row = Record<string, unknown>;
@@ -602,6 +603,7 @@ export default function CalendarPage() {
   const [view, setView]           = useState<ViewMode>('month');
   const [currentYear, setCurrentYear]   = useState(new Date().getFullYear());
   const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
+  const [dayTypeFilter, setDayTypeFilter] = useState<DayType | ''>('');
   const [dayOpen, setDayOpen]     = useState(false);
   const [bulkOpen, setBulkOpen]   = useState(false);
   const [uploadOpen, setUploadOpen] = useState(false);
@@ -639,6 +641,29 @@ export default function CalendarPage() {
 
       <Legend />
 
+      {/* Filter bar */}
+      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-800/80 bg-slate-900/60 px-3 py-2 backdrop-blur-sm">
+        <div className="flex items-center gap-1.5 pl-1 pr-2 text-xs uppercase tracking-wider text-slate-500">
+          <SlidersHorizontal className="h-3.5 w-3.5" />
+          Filters
+        </div>
+        <SMFilterSelect
+          icon={<Tag className="h-4 w-4" />}
+          label="Day type"
+          value={dayTypeFilter}
+          onChange={(v) => setDayTypeFilter(v as DayType | '')}
+          options={[{ label: 'All day types', value: '' }, ...DAY_TYPES.map((dt) => ({ label: dt, value: dt }))]}
+        />
+        {dayTypeFilter && (
+          <button
+            onClick={() => setDayTypeFilter('')}
+            className="flex items-center gap-1 rounded px-2 py-1 text-xs text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors"
+          >
+            <X className="h-3 w-3" /> Clear
+          </button>
+        )}
+      </div>
+
       {/* View switcher + nav */}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex gap-1 border-b border-slate-800">
@@ -674,7 +699,7 @@ export default function CalendarPage() {
       {!isLoading && view === 'month' && (
         <MonthCalendar year={currentYear} month={currentMonth} calMap={calMap} onDayClick={handleDayClick} />
       )}
-      {!isLoading && view === 'heat' && <HeatView calendar={calendar} />}
+      {!isLoading && view === 'heat' && <HeatView calendar={dayTypeFilter ? calendar.filter((c) => c.dayType === dayTypeFilter) : calendar} />}
       {!isLoading && view === 'list' && (
         <div className="overflow-x-auto rounded-lg border border-slate-800">
           <table className="w-full text-sm">
@@ -688,6 +713,7 @@ export default function CalendarPage() {
             </thead>
             <tbody>
               {[...calendar]
+                .filter((c) => !dayTypeFilter || c.dayType === dayTypeFilter)
                 .sort((a, b) => String(a.calendarDate).localeCompare(String(b.calendarDate)))
                 .map((c) => {
                   const dt  = c.dayType as DayType;

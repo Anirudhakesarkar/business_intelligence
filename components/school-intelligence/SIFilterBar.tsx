@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react';
 import { Building2, MapPin, Calendar, SlidersHorizontal } from 'lucide-react';
 import { DATE_RANGE_OPTIONS } from '@/lib/school-intelligence/constants';
-import type { SIFilters } from '@/lib/school-intelligence/types';
+import { presetDateBounds, todayIso } from '@/lib/school-intelligence/date-range';
+import type { SIDateRange, SIFilters } from '@/lib/school-intelligence/types';
 
 type OrgOption = { id: string; label: string };
 type SiteOption = { id: string; label: string };
@@ -91,6 +92,21 @@ export function SIFilterBar({ filters, onChange, showDateRange = true }: Props) 
   const set = <K extends keyof SIFilters>(key: K, value: SIFilters[K]) =>
     onChange({ ...filters, [key]: value });
 
+  const handleDateRangeChange = (value: SIDateRange) => {
+    if (value === 'custom') {
+      const bounds =
+        filters.dateRange === 'custom'
+          ? { from: filters.dateFrom ?? todayIso(), to: filters.dateTo ?? todayIso() }
+          : presetDateBounds(filters.dateRange);
+      onChange({ ...filters, dateRange: 'custom', dateFrom: bounds.from, dateTo: bounds.to });
+      return;
+    }
+    onChange({ ...filters, dateRange: value, dateFrom: undefined, dateTo: undefined });
+  };
+
+  const dateInputClass =
+    'bg-transparent text-slate-200 focus:outline-none [color-scheme:dark]';
+
   return (
     <div className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-800/80 bg-slate-900/60 px-3 py-2 backdrop-blur-sm">
       <div className="flex items-center gap-1.5 pl-1 pr-2 text-xs uppercase tracking-wider text-slate-500">
@@ -123,19 +139,47 @@ export function SIFilterBar({ filters, onChange, showDateRange = true }: Props) 
       </Field>
 
       {showDateRange && (
-        <Field icon={<Calendar className="h-4 w-4" />} label="Date range">
-          <select
-            value={filters.dateRange}
-            onChange={(e) => set('dateRange', e.target.value as SIFilters['dateRange'])}
-            className="bg-transparent text-slate-200 focus:outline-none [color-scheme:dark]"
-          >
-            {DATE_RANGE_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
-              </option>
-            ))}
-          </select>
-        </Field>
+        <>
+          <Field icon={<Calendar className="h-4 w-4" />} label="Date range">
+            <select
+              value={filters.dateRange}
+              onChange={(e) => handleDateRangeChange(e.target.value as SIDateRange)}
+              className={dateInputClass}
+            >
+              {DATE_RANGE_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </Field>
+          {filters.dateRange === 'custom' && (
+            <>
+              <Field icon={<Calendar className="h-4 w-4" />} label="Start date">
+                <input
+                  type="date"
+                  value={filters.dateFrom ?? ''}
+                  max={filters.dateTo ?? undefined}
+                  onChange={(e) =>
+                    onChange({ ...filters, dateRange: 'custom', dateFrom: e.target.value })
+                  }
+                  className={dateInputClass}
+                />
+              </Field>
+              <Field icon={<Calendar className="h-4 w-4" />} label="End date">
+                <input
+                  type="date"
+                  value={filters.dateTo ?? ''}
+                  min={filters.dateFrom ?? undefined}
+                  onChange={(e) =>
+                    onChange({ ...filters, dateRange: 'custom', dateTo: e.target.value })
+                  }
+                  className={dateInputClass}
+                />
+              </Field>
+            </>
+          )}
+        </>
       )}
     </div>
   );

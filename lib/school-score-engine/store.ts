@@ -159,11 +159,20 @@ export function getOverallTrend(organizationId: number, endDate: string, days = 
   return { organizationId, endDate, days, points };
 }
 
-export function getOverallCompare(organizationId: number, date: string, siteId?: number) {
+export function getOverallCompare(
+  organizationId: number,
+  date: string,
+  siteId?: number,
+  priorDateOverride?: string
+) {
   const current = getOverallScore(organizationId, date, siteId);
-  const priorEnd = new Date(`${date}T12:00:00.000Z`);
-  priorEnd.setUTCDate(priorEnd.getUTCDate() - 7);
-  const priorDate = priorEnd.toISOString().slice(0, 10);
+  const priorDate =
+    priorDateOverride ??
+    (() => {
+      const priorEnd = new Date(`${date}T12:00:00.000Z`);
+      priorEnd.setUTCDate(priorEnd.getUTCDate() - 7);
+      return priorEnd.toISOString().slice(0, 10);
+    })();
   const prior = getOverallScore(organizationId, priorDate, siteId);
   const delta =
     current?.overallScore != null && prior?.overallScore != null

@@ -1,10 +1,11 @@
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, createContext, useContext } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Sheet } from '@/components/ui/sheet';
 import { SMPageHeader } from '@/components/school-management/SMPageHeader';
+import { SMFilterBar, type SMFilters } from '@/components/school-management/SMFilterBar';
 import { schoolApiDelete, schoolApiGet, schoolApiPatch, schoolApiPost } from '@/lib/school-management/api';
 import { useSetupHealth } from '@/components/school-management/useSchoolFoundation';
 import { CheckCircle2, AlertTriangle } from 'lucide-react';
@@ -12,6 +13,10 @@ import { BulkImportButton } from '@/components/school-management/BulkImportButto
 import { CampusTreeView } from '@/components/school-management/CampusTreeView';
 
 const ORG_ID = 1;
+
+// Context to share site/building filter with tab components
+const SMFilterContext = createContext<SMFilters>({ siteId: '', buildingId: '' });
+function useSMFilterContext() { return useContext(SMFilterContext); }
 
 // ─── Data hooks ───────────────────────────────────────────────────────────────
 function useSites()     { return useQuery({ queryKey: ['sm-sites', ORG_ID],    queryFn: () => schoolApiGet(`/api/sites?organizationId=${ORG_ID}`) }); }
@@ -683,6 +688,7 @@ function SitesTab() {
 // ─── BUILDINGS ────────────────────────────────────────────────────────────────
 function BuildingsTab() {
   const qc = useQueryClient();
+  const smFilters = useSMFilterContext();
   const { data: sites = [] } = useSites();
   const { data = [], isLoading } = useBuildings();
   const [search, setSearch] = useState('');
@@ -716,7 +722,10 @@ function BuildingsTab() {
     if (!window.confirm(`Delete building "${String(r.name)}" and all floors, zones, and rooms under it?`)) return;
     remove.mutate(Number(r.id));
   };
-  const rows = (Array.isArray(data) ? data : []).filter((r: Row) => String(r.name ?? '').toLowerCase().includes(search.toLowerCase()));
+  const rows = (Array.isArray(data) ? data : []).filter((r: Row) =>
+    String(r.name ?? '').toLowerCase().includes(search.toLowerCase()) &&
+    (!smFilters.siteId || String(r.siteId) === smFilters.siteId)
+  );
   const openNew = () => {
     setEditing(null);
     setForm({ siteId: '', name: '', isActive: true });
@@ -782,6 +791,7 @@ function BuildingsTab() {
 // ─── FLOORS ───────────────────────────────────────────────────────────────────
 function FloorsTab() {
   const qc = useQueryClient();
+  const smFilters = useSMFilterContext();
   const { data: buildings = [] } = useBuildings();
   const { data = [], isLoading } = useFloors();
   const [search, setSearch] = useState('');
@@ -814,7 +824,15 @@ function FloorsTab() {
     if (!window.confirm(`Delete floor "${String(r.name)}" and all zones and rooms on it?`)) return;
     remove.mutate(Number(r.id));
   };
-  const rows = (Array.isArray(data) ? data : []).filter((r: Row) => String(r.name ?? '').toLowerCase().includes(search.toLowerCase()));
+  // Building IDs that belong to the selected site (for site-based floor filtering)
+  const siteBuildings = smFilters.siteId
+    ? new Set((Array.isArray(buildings) ? buildings : []).filter((b: Row) => String(b.siteId) === smFilters.siteId).map((b: Row) => String(b.id)))
+    : null;
+  const rows = (Array.isArray(data) ? data : []).filter((r: Row) =>
+    String(r.name ?? '').toLowerCase().includes(search.toLowerCase()) &&
+    (!smFilters.buildingId || String(r.buildingId) === smFilters.buildingId) &&
+    (!siteBuildings || siteBuildings.has(String(r.buildingId)))
+  );
   const openNew = () => {
     setEditing(null);
     setForm({ buildingId: '', name: '', levelNo: '0' });
@@ -882,7 +900,9 @@ const RISK_CATS = ['Staircase', 'Gate', 'Lab', 'Playground', 'ServerRoom', 'Fire
 
 function ZonesTab() {
   const qc = useQueryClient();
+  const smFilters = useSMFilterContext();
   const { data: floors = [] } = useFloors();
+  const { data: buildings = [] } = useBuildings();
   const { data = [], isLoading } = useZones();
   const [search, setSearch] = useState('');
   const [open, setOpen] = useState(false);
@@ -920,7 +940,19 @@ function ZonesTab() {
       return;
     remove.mutate(Number(r.id));
   };
-  const rows = (Array.isArray(data) ? data : []).filter((r: Row) => String(r.name ?? '').toLowerCase().includes(search.toLowerCase()));
+  // Build floor→building→site maps for zone location filtering
+  const floorBuildingMap = Object.fromEntries((Array.isArray(floors) ? floors : []).map((f: Row) => [String(f.id), String(f.buildingId ?? '')]));
+  const buildingSiteMap = Object.fromEntries((Array.isArray(buildings) ? buildings : []).map((b: Row) => [String(b.id), String(b.siteId ?? '')]));
+  const rows = (Array.isArray(data) ? data : []).filter((r: Row) => {
+    if (!String(r.name ?? '').toLowerCase().includes(search.toLowerCase())) return false;
+    if (smFilters.siteId || smFilters.buildingId) {
+      const buildingId = floorBuildingMap[String(r.floorId ?? '')] ?? '';
+      const siteId = buildingSiteMap[buildingId] ?? '';
+      if (smFilters.buildingId && buildingId !== smFilters.buildingId) return false;
+      if (smFilters.siteId && siteId !== smFilters.siteId) return false;
+    }
+    return true;
+  });
   const zonePayload = () => ({
     floorId: Number(form.floorId),
     name: form.name,
@@ -1013,7 +1045,10 @@ const DEFAULT_ROOM_TYPES = ['Classroom', 'Lab', 'Library', 'Hall', 'Office', 'Re
 
 function RoomsTab() {
   const qc = useQueryClient();
+  const smFilters = useSMFilterContext();
   const { data: zones = [] } = useZones();
+  const { data: floors = [] } = useFloors();
+  const { data: buildings = [] } = useBuildings();
   const { data = [], isLoading } = useRooms();
   const [search, setSearch] = useState('');
   const [open, setOpen] = useState(false);
@@ -1070,10 +1105,21 @@ function RoomsTab() {
       return;
     remove.mutate(Number(r.id));
   };
-  const rows = (Array.isArray(data) ? data : []).filter((r: Row) =>
-    String(r.roomName ?? '').toLowerCase().includes(search.toLowerCase()) ||
-    String(r.roomCode ?? '').toLowerCase().includes(search.toLowerCase())
-  );
+  const zoneFloorMap = Object.fromEntries((Array.isArray(zones) ? zones : []).map((z: Row) => [String(z.id), String(z.floorId ?? '')]));
+  const floorBuildingMap = Object.fromEntries((Array.isArray(floors) ? floors : []).map((f: Row) => [String(f.id), String(f.buildingId ?? '')]));
+  const buildingSiteMap = Object.fromEntries((Array.isArray(buildings) ? buildings : []).map((b: Row) => [String(b.id), String(b.siteId ?? '')]));
+  const rows = (Array.isArray(data) ? data : []).filter((r: Row) => {
+    const matchSearch = String(r.roomName ?? '').toLowerCase().includes(search.toLowerCase()) || String(r.roomCode ?? '').toLowerCase().includes(search.toLowerCase());
+    if (!matchSearch) return false;
+    if (smFilters.siteId || smFilters.buildingId) {
+      const floorId = zoneFloorMap[String(r.zoneId ?? '')] ?? '';
+      const buildingId = floorBuildingMap[floorId] ?? '';
+      const siteId = buildingSiteMap[buildingId] ?? '';
+      if (smFilters.buildingId && buildingId !== smFilters.buildingId) return false;
+      if (smFilters.siteId && siteId !== smFilters.siteId) return false;
+    }
+    return true;
+  });
   const openNew = () => {
     setEditing(null);
     setForm({ zoneId: '', roomCode: '', roomName: '', roomType: defaultRoomType, capacity: '30', isActive: true });
@@ -1938,6 +1984,7 @@ type TabId = typeof TABS[number]['id'];
 // ─── PAGE ─────────────────────────────────────────────────────────────────────
 export default function MasterDataPage() {
   const [activeTab, setActiveTab] = useState<TabId>('sites');
+  const [smFilters, setSmFilters] = useState<SMFilters>({ siteId: '', buildingId: '' });
   const ActiveComponent = useMemo(() => TABS.find((t) => t.id === activeTab)?.component ?? SitesTab, [activeTab]);
   const qc = useQueryClient();
 
@@ -1975,6 +2022,8 @@ export default function MasterDataPage() {
 
       <SetupHealthBanner />
 
+      <SMFilterBar filters={smFilters} onChange={setSmFilters} />
+
       {/* Tab bar */}
       <div className="flex gap-0.5 overflow-x-auto border-b border-slate-800 pb-0 scrollbar-none">
         {TABS.map((t) => (
@@ -1994,7 +2043,9 @@ export default function MasterDataPage() {
 
       {/* Active tab content */}
       <div className="min-h-[400px]">
-        <ActiveComponent />
+        <SMFilterContext.Provider value={smFilters}>
+          <ActiveComponent />
+        </SMFilterContext.Provider>
       </div>
     </div>
   );

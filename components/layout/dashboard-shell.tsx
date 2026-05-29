@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Sidebar } from './sidebar';
 import { Header } from './header';
+import { PageHeaderActionsProvider } from './page-header-context';
 
 const LG_BREAKPOINT = 1024;
 
@@ -40,10 +41,12 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
         showAsDrawer={showDrawer}
       />
       <div className={`flex h-screen min-w-0 flex-col overflow-x-hidden ${mainPadding}`}>
-        <Header onMenuClick={showDrawer ? () => setSidebarOpen(true) : undefined} />
-        <main className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-4 pb-10 sm:p-6 sm:pb-12">
-          {children}
-        </main>
+        <PageHeaderActionsProvider>
+          <Header onMenuClick={showDrawer ? () => setSidebarOpen(true) : undefined} />
+          <main className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-4 pb-10 sm:p-6 sm:pb-12">
+            {children}
+          </main>
+        </PageHeaderActionsProvider>
       </div>
     </div>
   );

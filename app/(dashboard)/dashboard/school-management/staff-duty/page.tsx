@@ -5,7 +5,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Sheet } from '@/components/ui/sheet';
 import { SMPageHeader } from '@/components/school-management/SMPageHeader';
+import { SMFilterBar, SMFilterSelect, type SMFilters } from '@/components/school-management/SMFilterBar';
 import { schoolApiDelete, schoolApiGet, schoolApiPatch, schoolApiPost } from '@/lib/school-management/api';
+import { CalendarDays, Shield } from 'lucide-react';
 
 const ORG_ID = 1;
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
@@ -474,6 +476,9 @@ export default function StaffDutyPage() {
   const { data = [], isLoading } = useRosters();
   const { data: staff = [] } = useStaff();
   const { data: zones = [] } = useZones();
+  const { data: floorsRaw = [] } = useFloors();
+  const { data: buildingsRaw = [] } = useBuildings();
+  const [smFilters, setSmFilters] = useState<SMFilters>({ siteId: '', buildingId: '' });
   const [dayFilter, setDayFilter] = useState<number | null>(null);
   const [dutyFilter, setDutyFilter] = useState('');
   const [view, setView] = useState<ViewMode>('grid');
@@ -505,10 +510,25 @@ export default function StaffDutyPage() {
     remove.mutate(Number(r.id));
   };
 
-  const filtered = rosters.filter((r) =>
-    (dayFilter == null || Number(r.dayOfWeek) === dayFilter) &&
-    (!dutyFilter || r.dutyType === dutyFilter)
-  );
+  // zone → floor → building → site for location filtering
+  const floors: Row[] = Array.isArray(floorsRaw) ? floorsRaw : [];
+  const buildings: Row[] = Array.isArray(buildingsRaw) ? buildingsRaw : [];
+  const zoneFloorMap = Object.fromEntries(zonesArr.map((z) => [String(z.id), String(z.floorId ?? '')]));
+  const floorBuildingMap = Object.fromEntries(floors.map((f) => [String(f.id), String(f.buildingId ?? '')]));
+  const buildingSiteMap = Object.fromEntries(buildings.map((b) => [String(b.id), String(b.siteId ?? '')]));
+
+  const filtered = rosters.filter((r) => {
+    if (dayFilter != null && Number(r.dayOfWeek) !== dayFilter) return false;
+    if (dutyFilter && r.dutyType !== dutyFilter) return false;
+    if (smFilters.siteId || smFilters.buildingId) {
+      const floorId = zoneFloorMap[String(r.zoneId ?? '')] ?? '';
+      const buildingId = floorBuildingMap[floorId] ?? '';
+      const siteId = buildingSiteMap[buildingId] ?? '';
+      if (smFilters.buildingId && buildingId !== smFilters.buildingId) return false;
+      if (smFilters.siteId && siteId !== smFilters.siteId) return false;
+    }
+    return true;
+  });
 
   const exportCsv = () => {
     const cols = ['id', 'staffMemberId', 'zoneId', 'dutyType', 'dayOfWeek', 'startTime', 'endTime', 'isCriticalWindow'];
@@ -549,22 +569,34 @@ export default function StaffDutyPage() {
       <GapWarnings rosters={rosters} />
 
       {/* Filters + view toggle */}
-      <div className="flex flex-wrap gap-2 items-center justify-between">
-        <div className="flex flex-wrap gap-2">
-          <select className="h-9 rounded-md border border-slate-700 bg-slate-900 px-3 text-sm text-slate-300 focus:outline-none" value={dayFilter ?? ''} onChange={(e) => setDayFilter(e.target.value ? Number(e.target.value) : null)}>
-            <option value="">All days</option>
-            {DAYS.map((d, i) => <option key={i} value={i + 1}>{d}</option>)}
-          </select>
-          <select className="h-9 rounded-md border border-slate-700 bg-slate-900 px-3 text-sm text-slate-300 focus:outline-none" value={dutyFilter} onChange={(e) => setDutyFilter(e.target.value)}>
-            <option value="">All duty types</option>
-            {DUTY_TYPES.map((dt) => <option key={dt} value={dt}>{dt}</option>)}
-          </select>
-          {(dayFilter != null || dutyFilter) && <button onClick={() => { setDayFilter(null); setDutyFilter(''); }} className="text-xs text-slate-500 hover:text-slate-300 px-2">Clear</button>}
-        </div>
-        <div className="flex rounded-md border border-slate-700 overflow-hidden text-sm">
-          {(['grid', 'list'] as ViewMode[]).map((v) => (
-            <button key={v} onClick={() => setView(v)} className={`px-3 py-1.5 capitalize ${view === v ? 'bg-blue-600 text-white' : 'text-slate-400 hover:bg-slate-800'}`}>{v}</button>
-          ))}
+      <div className="space-y-2">
+        <SMFilterBar
+          filters={smFilters}
+          onChange={setSmFilters}
+          hasExtraActive={dayFilter != null || !!dutyFilter}
+          onClearAll={() => { setDayFilter(null); setDutyFilter(''); }}
+        >
+          <SMFilterSelect
+            icon={<CalendarDays className="h-4 w-4" />}
+            label="Day"
+            value={dayFilter != null ? String(dayFilter) : ''}
+            onChange={(v) => setDayFilter(v ? Number(v) : null)}
+            options={[{ label: 'All days', value: '' }, ...DAYS.map((d, i) => ({ label: d, value: String(i + 1) }))]}
+          />
+          <SMFilterSelect
+            icon={<Shield className="h-4 w-4" />}
+            label="Duty type"
+            value={dutyFilter}
+            onChange={setDutyFilter}
+            options={[{ label: 'All duty types', value: '' }, ...DUTY_TYPES.map((dt) => ({ label: dt, value: dt }))]}
+          />
+        </SMFilterBar>
+        <div className="flex justify-end">
+          <div className="flex rounded-md border border-slate-700 overflow-hidden text-sm">
+            {(['grid', 'list'] as ViewMode[]).map((v) => (
+              <button key={v} onClick={() => setView(v)} className={`px-3 py-1.5 capitalize ${view === v ? 'bg-blue-600 text-white' : 'text-slate-400 hover:bg-slate-800'}`}>{v}</button>
+            ))}
+          </div>
         </div>
       </div>
 

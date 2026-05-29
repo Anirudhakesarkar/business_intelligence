@@ -1,11 +1,11 @@
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Calendar, ShieldAlert, Camera, Wifi, WifiOff, AlertTriangle, CheckCircle2, Flame, Activity, RefreshCw, Loader2 } from 'lucide-react';
+import { useState, useCallback, useEffect } from 'react';
+import { Calendar, Camera, Wifi, WifiOff, AlertTriangle, CheckCircle2, Flame, Activity, Loader2, ShieldAlert } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { SIModuleHeader } from '@/components/school-intelligence/SIModuleHeader';
+import { usePageHeaderRefresh } from '@/components/layout/page-header-context';
+import { SchoolIntelligenceBreadcrumbs } from '@/components/school-intelligence/SchoolIntelligenceBreadcrumbs';
 import { useSchoolModuleScore } from '@/components/school-intelligence/useSchoolModuleScore';
 import { todayIso } from '@/components/school-intelligence/useSchoolDailySummaries';
 
@@ -151,32 +151,28 @@ export default function CampusSafetyPage() {
   const highEvents = events.filter((e) => HIGH_EVENT_TYPES.includes(e.eventType));
   const openCount = events.filter((e) => e.status === 'Open').length;
 
+  const handleRefresh = useCallback(() => {
+    loadEvents();
+    loadHealth();
+    safetyScore.reload();
+    securityScore.reload();
+  }, [loadEvents, loadHealth, safetyScore, securityScore]);
+
+  usePageHeaderRefresh(handleRefresh);
+
   return (
     <div className="space-y-6">
-      <Link href="/dashboard/school-intelligence" className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-sky-400">
-        <ArrowLeft className="h-4 w-4" /> Back to School Intelligence
-      </Link>
-
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <SIModuleHeader
-          title="Campus Safety & Security"
-          description="Safety incidents, camera health, restricted zone activity, and emergency protocol coverage."
-          icon={<ShieldAlert className="h-6 w-6" />}
-        />
-        <div className="flex flex-wrap items-center gap-2">
-          <label className="flex items-center gap-2 text-sm text-slate-400">
-            <Calendar className="h-4 w-4" />
-            <input
-              type="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              className="rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100"
-            />
-          </label>
-          <Button size="sm" variant="outline" onClick={() => { loadEvents(); loadHealth(); safetyScore.reload(); securityScore.reload(); }}>
-            <RefreshCw className="mr-1 h-3 w-3" /> Refresh
-          </Button>
-        </div>
+      <SchoolIntelligenceBreadcrumbs current="Campus Safety" />
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        <label className="flex items-center gap-2 text-sm text-slate-400">
+          <Calendar className="h-4 w-4" />
+          <input
+            type="date"
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+            className="rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100"
+          />
+        </label>
       </div>
 
       {/* Score gauges */}

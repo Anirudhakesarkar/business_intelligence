@@ -1,11 +1,10 @@
 'use client';
 
-import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
-import { ArrowLeft, CheckCircle2, Loader2, RefreshCw, User, Calendar, TrendingUp, Clock, ListChecks } from 'lucide-react';
+import { CheckCircle2, Loader2, User, Calendar, TrendingUp, Clock } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { SIModuleHeader } from '@/components/school-intelligence/SIModuleHeader';
+import { usePageHeaderRefresh } from '@/components/layout/page-header-context';
+import { SchoolIntelligenceBreadcrumbs } from '@/components/school-intelligence/SchoolIntelligenceBreadcrumbs';
 
 type Action = {
   id: number;
@@ -73,40 +72,29 @@ export default function SchoolActionsPage() {
   const openCount = actions.filter((a) => a.status === 'open').length;
   const completedCount = actions.filter((a) => a.status === 'completed').length;
 
+  usePageHeaderRefresh(load);
+
   return (
     <div className="space-y-6">
-      <Link href="/dashboard/school-intelligence" className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-sky-400">
-        <ArrowLeft className="h-4 w-4" /> Back to School Intelligence
-      </Link>
-
-      <div className="flex items-start justify-between gap-4">
-        <SIModuleHeader
-          title="GPT Action Tasks"
-          description="Recommended actions generated from GPT recommendations — complete tasks to improve school scores."
-          icon={<ListChecks className="h-6 w-6" />}
-        />
-        <div className="flex items-center gap-2">
-          {dataSource && (
-            <span
-              className={`rounded border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide ${
-                dataSource === 'postgres'
-                  ? 'border-emerald-500/40 text-emerald-300'
-                  : 'border-amber-500/40 text-amber-300'
-              }`}
-              title={
-                dataSource === 'postgres'
-                  ? 'Reading from school_gpt_action_tasks in Postgres'
-                  : 'Reading from in-memory store (snapshot mode)'
-              }
-            >
-              {dataSource === 'postgres' ? 'Postgres' : 'In-memory'}
-            </span>
-          )}
-          <Button size="sm" variant="outline" onClick={load} disabled={loading}>
-            <RefreshCw className="mr-1 h-3 w-3" /> Refresh
-          </Button>
+      <SchoolIntelligenceBreadcrumbs current="Action Tasks" />
+      {dataSource && (
+        <div className="flex justify-end">
+          <span
+            className={`rounded border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide ${
+              dataSource === 'postgres'
+                ? 'border-emerald-500/40 text-emerald-300'
+                : 'border-amber-500/40 text-amber-300'
+            }`}
+            title={
+              dataSource === 'postgres'
+                ? 'Reading from school_gpt_action_tasks in Postgres'
+                : 'Reading from in-memory store (snapshot mode)'
+            }
+          >
+            {dataSource === 'postgres' ? 'Postgres' : 'In-memory'}
+          </span>
         </div>
-      </div>
+      )}
 
       {/* Summary cards */}
       {actions.length > 0 && (

@@ -6,7 +6,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Sheet } from '@/components/ui/sheet';
 import { SMPageHeader } from '@/components/school-management/SMPageHeader';
+import { SMFilterBar, SMFilterSelect, type SMFilters } from '@/components/school-management/SMFilterBar';
 import { schoolApiDelete, schoolApiGet, schoolApiPatch, schoolApiPost } from '@/lib/school-management/api';
+import { Tag, Activity } from 'lucide-react';
 
 const ORG_ID = 1;
 
@@ -665,8 +667,13 @@ export default function CamerasMappingPage() {
   const { data = [], isLoading } = useCameras();
   const { data: zonesRaw = [] } = useZones();
   const { data: roomsRaw = [] } = useRooms();
+  const { data: floorsRaw = [] } = useFloors();
+  const { data: buildingsRaw = [] } = useBuildings();
   const zones: Row[] = Array.isArray(zonesRaw) ? zonesRaw : [];
   const rooms: Row[] = Array.isArray(roomsRaw) ? roomsRaw : [];
+  const floors: Row[] = Array.isArray(floorsRaw) ? floorsRaw : [];
+  const buildings: Row[] = Array.isArray(buildingsRaw) ? buildingsRaw : [];
+  const [smFilters, setSmFilters] = useState<SMFilters>({ siteId: '', buildingId: '' });
   const [search, setSearch] = useState('');
   const [purposeFilter, setPurposeFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
@@ -678,12 +685,29 @@ export default function CamerasMappingPage() {
   const [bulkBusy, setBulkBusy] = useState(false);
 
   const cameras: Row[] = Array.isArray(data) ? data : [];
+
+  // Build zone→building→site lookup for site/building filtering
+  const zoneFloorMap = useMemo(() => Object.fromEntries(zones.map((z) => [String(z.id), String(z.floorId ?? '')])), [zones]);
+  const floorBuildingMap = useMemo(() => Object.fromEntries(floors.map((f) => [String(f.id), String(f.buildingId ?? '')])), [floors]);
+  const buildingSiteMap = useMemo(() => Object.fromEntries(buildings.map((b) => [String(b.id), String(b.siteId ?? '')])), [buildings]);
+
+  function cameraMatchesLocation(c: Row): boolean {
+    if (!smFilters.siteId && !smFilters.buildingId) return true;
+    const zoneId = String(c.zoneId ?? '');
+    const floorId = zoneFloorMap[zoneId] ?? '';
+    const buildingId = floorBuildingMap[floorId] ?? '';
+    const siteId = buildingSiteMap[buildingId] ?? '';
+    if (smFilters.buildingId && buildingId !== smFilters.buildingId) return false;
+    if (smFilters.siteId && siteId !== smFilters.siteId) return false;
+    return true;
+  }
+
   const filtered = cameras.filter((c) => {
     const q = search.toLowerCase();
     const matchQ = !q || String(c.name ?? '').toLowerCase().includes(q) || String(c.cameraCode ?? '').toLowerCase().includes(q);
     const matchP = !purposeFilter || c.purpose === purposeFilter;
     const matchS = !statusFilter || c.status === statusFilter;
-    return matchQ && matchP && matchS;
+    return matchQ && matchP && matchS && cameraMatchesLocation(c);
   });
 
   const visibleIds = useMemo(
@@ -784,28 +808,40 @@ export default function CamerasMappingPage() {
       <MappingStatusBanner />
 
       {/* Filters and view toggle */}
-      <div className="flex flex-wrap gap-2 items-center justify-between">
-        <div className="flex flex-wrap gap-2">
+      <div className="space-y-2">
+        <SMFilterBar
+          filters={smFilters}
+          onChange={setSmFilters}
+          hasExtraActive={!!(search || purposeFilter || statusFilter)}
+          onClearAll={() => { setSearch(''); setPurposeFilter(''); setStatusFilter(''); }}
+        >
+          <SMFilterSelect
+            icon={<Tag className="h-4 w-4" />}
+            label="Purpose"
+            value={purposeFilter}
+            onChange={setPurposeFilter}
+            options={[{ label: 'All purposes', value: '' }, ...PURPOSES.map((p) => ({ label: p, value: p }))]}
+          />
+          <SMFilterSelect
+            icon={<Activity className="h-4 w-4" />}
+            label="Status"
+            value={statusFilter}
+            onChange={setStatusFilter}
+            options={[{ label: 'All statuses', value: '' }, ...STATUSES.map((s) => ({ label: s, value: s }))]}
+          />
           <input
-            className="h-9 rounded-md border border-slate-700 bg-slate-900 px-3 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-blue-500 w-48"
+            className="h-9 rounded-lg border border-slate-800 bg-slate-950/40 px-3 text-sm text-slate-200 placeholder:text-slate-500 focus:outline-none hover:border-slate-700 transition-colors w-44"
             placeholder="Search cameras…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
-          <select className="h-9 rounded-md border border-slate-700 bg-slate-900 px-3 text-sm text-slate-300 focus:outline-none" value={purposeFilter} onChange={(e) => setPurposeFilter(e.target.value)}>
-            <option value="">All purposes</option>
-            {PURPOSES.map((p) => <option key={p} value={p}>{p}</option>)}
-          </select>
-          <select className="h-9 rounded-md border border-slate-700 bg-slate-900 px-3 text-sm text-slate-300 focus:outline-none" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-            <option value="">All statuses</option>
-            {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
-          </select>
-          {(search || purposeFilter || statusFilter) && <button onClick={() => { setSearch(''); setPurposeFilter(''); setStatusFilter(''); }} className="text-xs text-slate-500 hover:text-slate-300 px-2">Clear</button>}
-        </div>
-        <div className="flex rounded-md border border-slate-700 overflow-hidden text-sm">
-          {(['table', 'map'] as ViewTab[]).map((v) => (
-            <button key={v} onClick={() => setView(v)} className={`px-3 py-1.5 capitalize ${view === v ? 'bg-blue-600 text-white' : 'text-slate-400 hover:bg-slate-800'}`}>{v}</button>
-          ))}
+        </SMFilterBar>
+        <div className="flex justify-end">
+          <div className="flex rounded-md border border-slate-700 overflow-hidden text-sm">
+            {(['table', 'map'] as ViewTab[]).map((v) => (
+              <button key={v} onClick={() => setView(v)} className={`px-3 py-1.5 capitalize ${view === v ? 'bg-blue-600 text-white' : 'text-slate-400 hover:bg-slate-800'}`}>{v}</button>
+            ))}
+          </div>
         </div>
       </div>
 

@@ -83,8 +83,6 @@ Route group: `app/(dashboard)/dashboard/school-management/*`
 Route group: `app/(dashboard)/dashboard/school-intelligence/*`
 
 - **Overview**: `/dashboard/school-intelligence`
-- **Master Data Setup**: `/dashboard/school-intelligence/master-data`
-- **Overall Score**: `/dashboard/school-intelligence/overall-score`
 - **Gate Flow**: `/dashboard/school-intelligence/gate-flow`
 - **Academic Operations**: `/dashboard/school-intelligence/academic-operations`
 - **Zones & Schedule**: `/dashboard/school-intelligence/zones-schedule`
@@ -586,16 +584,10 @@ These pages typically use:
 ### Component inventory (Score pages)
 
 - **School Intelligence overview**: `app/(dashboard)/dashboard/school-intelligence/page.tsx`
-  - `SIFilterBar`, `SISchoolContextBanner`, `SIQuickLinks`
+  - `SIFilterBar`, `SIModuleScoreGrid`
   - `SIModuleHeader`, `SIKPICard`
-  - `SchoolCopilotPanel`, `SchoolCopilotQA`, `SchoolRecommendationsStrip`
-  - Hooks: `useSchoolDailyOverview`, `useSchoolOverallScore`
+  - Hooks: `useSchoolOverallScore`
   - **Card names shown (as rendered in UI)**
-    - **Overall school score** (hero value card)
-    - **Daily facts preview** (facts list card)
-    - **GPT Principal Summary** (copilot panel card)
-    - **Ask School Intelligence** (Q&A card)
-    - **Recommendations** (recommendations card)
     - **Module scores (Phase 5)**: KPI cards labeled:
       - Teacher Productivity
       - Student Occupancy
@@ -609,9 +601,6 @@ These pages typically use:
       - Security
   - **Buttons/links shown (names)**
     - **Refresh**
-    - **Bootstrap platform (Phases 1–6 E2E)**
-    - Link: **Overall score detail**
-    - Link: **Action tasks**
   - **Filters shown (names + options)**
     - Filter bar label: **Filters**
     - **Organization** dropdown options:
@@ -625,23 +614,6 @@ These pages typically use:
       - (When DB enabled: loaded from `GET /api/sites`)
     - **Date range** dropdown options:
       - From `DATE_RANGE_OPTIONS` (`lib/school-intelligence/constants`) — labels vary by config (example: “Last 7 days”)
-  - **Banner text shown**
-    - **School Intelligence preview**
-    - Button/link: **Setup checklist**
-
-- **Overall score detail**: `app/(dashboard)/dashboard/school-intelligence/overall-score/page.tsx`
-  - `SIModuleHeader`, `Card*`, `Button`
-  - Hooks: `useSchoolDailyModule`, `useSchoolOverallScore`
-  - Logic: module visibility via `scoreVisibility.ts`
-  - **Card names shown**
-    - **Overall School Score** (hero)
-    - **Module Breakdown (worst → best)** (grid; each card title is the module label)
-    - **Score inputs (Phase 4 daily facts)** (JSON viewer)
-  - **Buttons/links shown (names)**
-    - Link: **Back to School Intelligence**
-    - **Calculate** / **Calculate now** (when empty)
-    - Link: **Adjust weights →**
-
 - **Score settings**: `app/(dashboard)/dashboard/school-intelligence/score-settings/page.tsx`
   - `Card*`, `Button`
   - Uses `DEFAULT_WEIGHTS`, `MODULE_LABELS` (weights UI)
@@ -1138,40 +1110,6 @@ This section lists **the exact UI text** (labels users see) per page in School M
 ## School Intelligence — per-page UI text inventory (labels, cards, buttons, filters)
 
 This section lists **the exact UI text** (labels users see) per page, so Codex can reason about UX coverage and gaps.
-
-### `/dashboard/school-intelligence/master-data` (Master Data Setup)
-
-- **Page title**: **Master Data Setup**
-- **Header/description text**: “Foundation data that gives school context to every AI detection. Complete Phase 1 before enabling intelligence modules.”
-- **Cards (KPI labels)**
-  - **Cameras mapped** (hint: “Active cameras tagged”)
-  - **Rooms with capacity** (hint: “Capacity required”)
-  - **Timetable entries** (hint: “Active class periods”)
-  - **Calendar days** (hint: “Needs ≥ 30”)
-- **Progress text**
-  - “**X% complete**”
-  - “**Y of Z Phase 1 items complete**”
-  - “**Ready for Phase 2 ✓**” / “**Complete Phase 1 first**”
-- **Checklist section titles**
-  - **Setup checklist**
-  - **Intelligence inputs**
-  - **Camera purpose mapping**
-- **Checklist row status pills**
-  - **Done** / **Pending** / **Next**
-- **Checklist items (exact labels)**
-  - Organization profile
-  - Site profile
-  - Camera purpose mapping
-  - Room capacity
-  - School calendar
-  - Timetable
-  - Staff duty roster
-  - Teacher schedule mapping
-  - Break / lunch / dispersal timing
-  - Risk zone definitions
-  - Compliance & safety waivers
-- **Buttons/links**
-  - Link: **School management**
 
 ### `/dashboard/school-intelligence/gate-flow` (Gate Arrival & Dispersal)
 

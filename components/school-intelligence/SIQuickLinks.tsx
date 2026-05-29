@@ -3,7 +3,6 @@
 import Link from 'next/link';
 import {
   ArrowUpRight,
-  ClipboardCheck,
   ShieldCheck,
   Users,
   Building,
@@ -15,12 +14,9 @@ import {
   DoorOpen,
   CheckCircle2,
   Map as MapIcon,
-  Gauge,
   Sliders,
   Inbox,
   Workflow,
-  FileText,
-  Sparkles,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -34,8 +30,6 @@ type NavLink = {
 };
 
 const LINKS: NavLink[] = [
-  { href: '/dashboard/school-intelligence/master-data', label: 'Master Data', description: 'Foundation setup checklist', phase: 1, category: 'setup', icon: ClipboardCheck },
-
   { href: '/dashboard/school-intelligence/campus-safety', label: 'Campus Safety', description: 'Safety & security events', phase: 2, category: 'module', icon: ShieldCheck },
   { href: '/dashboard/school-intelligence/teacher-productivity', label: 'Teacher Productivity', description: 'Presence, conduct, gaps', phase: 2, category: 'module', icon: Users },
   { href: '/dashboard/school-intelligence/teacher-supervision', label: 'Teacher Supervision', description: 'Supervision gap analysis', phase: 2, category: 'module', icon: UserCog },
@@ -49,18 +43,15 @@ const LINKS: NavLink[] = [
   { href: '/dashboard/school-intelligence/compliance', label: 'Compliance', description: 'Violations rollup', phase: 2, category: 'module', icon: CheckCircle2 },
   { href: '/dashboard/school-intelligence/zones-schedule', label: 'Zones & Schedule', description: 'Live timetable & rooms', phase: 2, category: 'module', icon: MapIcon },
 
-  { href: '/dashboard/school-intelligence/overall-score', label: 'Overall Score', description: 'Weighted composite score', phase: 5, category: 'tools', icon: Gauge },
   { href: '/dashboard/school-intelligence/score-settings', label: 'Score Settings', description: 'Weight profile editor', phase: 5, category: 'tools', icon: Sliders },
   { href: '/dashboard/school-intelligence/events', label: 'Events Inbox', description: 'Rule engine events', phase: 3, category: 'tools', icon: Inbox },
   { href: '/dashboard/school-intelligence/rules', label: 'Intelligence Rules', description: 'Enable/disable rules', phase: 3, category: 'tools', icon: Workflow },
-  { href: '/dashboard/school-intelligence/digest', label: 'Daily Digest', description: 'GPT principal summary', phase: 6, category: 'tools', icon: FileText },
-  { href: '/dashboard/school-intelligence/actions', label: 'Action Tasks', description: 'GPT recommended actions', phase: 6, category: 'tools', icon: Sparkles },
 ];
 
 const CATEGORY_META: Record<NavLink['category'], { label: string; description: string }> = {
   setup: { label: 'Foundation', description: 'Configure once' },
   module: { label: 'Intelligence Modules', description: 'Daily insights per area' },
-  tools: { label: 'Scoring & Copilot', description: 'Composite views and AI tools' },
+  tools: { label: 'Scoring & Tools', description: 'Composite views and configuration' },
 };
 
 const PHASE_BADGE: Record<number, string> = {
@@ -101,7 +92,9 @@ export function SIQuickLinks() {
 
   return (
     <section className="space-y-5">
-      {(['setup', 'module', 'tools'] as const).map((cat) => (
+      {(['setup', 'module', 'tools'] as const)
+        .filter((cat) => grouped[cat].length > 0)
+        .map((cat) => (
         <div key={cat}>
           <div className="mb-2.5 flex items-baseline justify-between">
             <h3 className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">

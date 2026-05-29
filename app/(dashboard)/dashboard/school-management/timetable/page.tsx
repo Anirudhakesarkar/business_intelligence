@@ -5,7 +5,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Sheet } from '@/components/ui/sheet';
 import { SMPageHeader } from '@/components/school-management/SMPageHeader';
+import { SMFilterBar, SMFilterSelect, type SMFilters } from '@/components/school-management/SMFilterBar';
 import { schoolApiDelete, schoolApiGet, schoolApiPatch, schoolApiPost } from '@/lib/school-management/api';
+import { GraduationCap, Users } from 'lucide-react';
 
 const ORG_ID = 1;
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -26,6 +28,8 @@ function useSections(classId?: number) { return useQuery({ queryKey: ['sm-sectio
 function useSubjects() { return useQuery({ queryKey: ['sm-subjects', ORG_ID], queryFn: () => schoolApiGet(`/api/subjects?organizationId=${ORG_ID}`) }); }
 function useTeachers() { return useQuery({ queryKey: ['sm-teachers', ORG_ID], queryFn: () => schoolApiGet(`/api/teachers?organizationId=${ORG_ID}`) }); }
 function useRooms() { return useQuery({ queryKey: ['sm-rooms', ORG_ID], queryFn: () => schoolApiGet(`/api/rooms?organizationId=${ORG_ID}`) }); }
+function useFloors() { return useQuery({ queryKey: ['sm-floors', ORG_ID], queryFn: () => schoolApiGet(`/api/floors?organizationId=${ORG_ID}`) }); }
+function useBuildings() { return useQuery({ queryKey: ['sm-buildings', ORG_ID], queryFn: () => schoolApiGet(`/api/buildings?organizationId=${ORG_ID}`) }); }
 
 // ─── Shared atoms ─────────────────────────────────────────────────────────────
 function FormField({ label, children, error }: { label: string; children: React.ReactNode; error?: string }) {
@@ -553,9 +557,27 @@ export default function TimetablePage() {
   const { data: allSections = [] } = useQuery({ queryKey: ['sm-sections-all'], queryFn: () => schoolApiGet('/api/sections') });
   const [filterClassId, setFilterClassId] = useState('');
   const [filterSectionId, setFilterSectionId] = useState('');
+  const [smFilters, setSmFilters] = useState<SMFilters>({ siteId: '', buildingId: '' });
   const { data: subjects = [] } = useSubjects();
   const { data: teachers = [] } = useTeachers();
   const { data: rooms = [] } = useRooms();
+  const { data: floorsRaw = [] } = useFloors();
+  const { data: buildingsRaw = [] } = useBuildings();
+  const floors: Row[] = Array.isArray(floorsRaw) ? floorsRaw : [];
+  const buildings: Row[] = Array.isArray(buildingsRaw) ? buildingsRaw : [];
+
+  // room → building → site lookup for location-based filtering
+  const roomBuildingMap = useMemo(() => {
+    const floorBuildingMap = Object.fromEntries(floors.map((f) => [String(f.id), String(f.buildingId ?? '')]));
+    const buildingSiteMap = Object.fromEntries(buildings.map((b) => [String(b.id), String(b.siteId ?? '')]));
+    const roomArr: Row[] = Array.isArray(rooms) ? rooms : [];
+    return Object.fromEntries(roomArr.map((r) => {
+      const floorId = String(r.floorId ?? '');
+      const buildingId = floorBuildingMap[floorId] ?? '';
+      const siteId = buildingSiteMap[buildingId] ?? '';
+      return [String(r.id), { buildingId, siteId }];
+    }));
+  }, [rooms, floors, buildings]);
   const [view, setView] = useState<ViewMode>('weekly');
   const [entryOpen, setEntryOpen] = useState(false);
   const [editingEntry, setEditingEntry] = useState<Row | null>(null);
@@ -576,8 +598,16 @@ export default function TimetablePage() {
     if (filterSectionId) {
       list = list.filter((e) => String(e.sectionId) === filterSectionId);
     }
+    if (smFilters.siteId || smFilters.buildingId) {
+      list = list.filter((e) => {
+        const loc = roomBuildingMap[String(e.roomId ?? '')] ?? { buildingId: '', siteId: '' };
+        if (smFilters.buildingId && loc.buildingId !== smFilters.buildingId) return false;
+        if (smFilters.siteId && loc.siteId !== smFilters.siteId) return false;
+        return true;
+      });
+    }
     return list;
-  }, [entries, filterClassId, filterSectionId, allSec]);
+  }, [entries, filterClassId, filterSectionId, allSec, smFilters, roomBuildingMap]);
 
   const sectionOptionsForClass = useMemo(() => {
     const secs = filterClassId
@@ -635,46 +665,34 @@ export default function TimetablePage() {
         </div>
       )}
 
-      {/* Class / section filters — each grade+section has its own timetable */}
-      <div className="flex flex-wrap items-end gap-3 rounded-lg border border-slate-800 bg-slate-900/40 px-4 py-3">
-        <div className="space-y-1">
-          <label className="block text-[10px] font-medium uppercase tracking-wide text-slate-500">Class (grade)</label>
-          <select
-            className="h-9 min-w-[10rem] rounded-md border border-slate-700 bg-slate-900 px-3 text-sm text-slate-200"
-            value={filterClassId}
-            onChange={(e) => {
-              setFilterClassId(e.target.value);
-              setFilterSectionId('');
-            }}
-          >
-            <option value="">All classes</option>
-            {classList.map((c) => (
-              <option key={String(c.id)} value={String(c.id)}>{String(c.name)}</option>
-            ))}
-          </select>
-        </div>
-        <div className="space-y-1">
-          <label className="block text-[10px] font-medium uppercase tracking-wide text-slate-500">Section</label>
-          <select
-            className="h-9 min-w-[12rem] rounded-md border border-slate-700 bg-slate-900 px-3 text-sm text-slate-200"
-            value={filterSectionId}
-            onChange={(e) => setFilterSectionId(e.target.value)}
-            disabled={!filterClassId && sectionOptionsForClass.length > 30}
-          >
-            <option value="">All sections{filterClassId ? ' in class' : ''}</option>
-            {sectionOptionsForClass.map((o) => (
-              <option key={o.value} value={o.value}>{o.label}</option>
-            ))}
-          </select>
-        </div>
+      {/* Filters */}
+      <SMFilterBar
+        filters={smFilters}
+        onChange={setSmFilters}
+        hasExtraActive={!!(filterClassId || filterSectionId)}
+        onClearAll={() => { setFilterClassId(''); setFilterSectionId(''); }}
+      >
+        <SMFilterSelect
+          icon={<GraduationCap className="h-4 w-4" />}
+          label="Class"
+          value={filterClassId}
+          onChange={(v) => { setFilterClassId(v); setFilterSectionId(''); }}
+          options={[{ label: 'All classes', value: '' }, ...classList.map((c) => ({ label: String(c.name), value: String(c.id) }))]}
+        />
+        <SMFilterSelect
+          icon={<Users className="h-4 w-4" />}
+          label="Section"
+          value={filterSectionId}
+          onChange={setFilterSectionId}
+          options={[{ label: 'All sections', value: '' }, ...sectionOptionsForClass]}
+        />
+      </SMFilterBar>
+      {/* kept for legacy — remove once SMFilterBar clear covers all */}
+      <div className="hidden">
         {(filterClassId || filterSectionId) && (
           <button
             type="button"
-            className="text-xs text-slate-500 hover:text-slate-300 pb-2"
-            onClick={() => {
-              setFilterClassId('');
-              setFilterSectionId('');
-            }}
+            onClick={() => { setFilterClassId(''); setFilterSectionId(''); }}
           >
             Clear filters
           </button>

@@ -3,8 +3,8 @@
 import { useState, useMemo, useCallback } from 'react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
-import { SMPageHeader } from '@/components/school-management/SMPageHeader';
 import { SchoolIntelligenceBreadcrumbs } from '@/components/school-intelligence/SchoolIntelligenceBreadcrumbs';
+import { usePageHeaderRefresh } from '@/components/layout/page-header-context';
 import {
   useEvaluateRules,
   useIntelligenceEvents,
@@ -15,7 +15,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { useQueryClient } from '@tanstack/react-query';
 import {
-  RefreshCw, ShieldCheck, Play, AlertTriangle, AlertCircle,
+  ShieldCheck, Play, AlertTriangle, AlertCircle,
   CheckCircle2, Clock, Filter, ChevronRight, Inbox,
 } from 'lucide-react';
 
@@ -238,13 +238,15 @@ export default function EventsInboxPage() {
     (toDate === '' || toDate === fromDate) &&
     eventTypeFilter === '';
 
+  const handleRefresh = useCallback(() => {
+    void refetch();
+  }, [refetch]);
+
+  usePageHeaderRefresh(handleRefresh);
+
   return (
     <div className="space-y-6">
       <SchoolIntelligenceBreadcrumbs current="Events inbox" />
-      <SMPageHeader
-        title="Intelligence Events"
-        subtitle="Rule engine output — actionable events for supervisors and principals."
-      />
 
       <div className="flex flex-wrap gap-2">
         <Button size="sm" onClick={() => seed.mutate()} disabled={seed.isPending}>
@@ -254,9 +256,6 @@ export default function EventsInboxPage() {
         <Button size="sm" variant="secondary" onClick={() => evaluate.mutate()} disabled={evaluate.isPending}>
           <Play className="mr-1 h-3 w-3" />
           {evaluate.isPending ? 'Evaluating…' : 'Evaluate rules'}
-        </Button>
-        <Button size="sm" variant="outline" onClick={() => refetch()}>
-          <RefreshCw className="mr-1 h-3 w-3" /> Refresh
         </Button>
       </div>
 
