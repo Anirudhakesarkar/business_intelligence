@@ -99,7 +99,7 @@ function seedScoresForDates(organizationId: number, dates: string[]) {
     assert.equal(second.ok, true);
     if (!first.ok || !second.ok) return;
     assert.equal(first.summary.id, second.summary.id);
-    assert.equal(second.cached, true);
+    assert.equal('cached' in second && second.cached, true);
   });
 
   it('weekly summary skips holidays and aggregates school days', () => {

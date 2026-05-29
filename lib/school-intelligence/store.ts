@@ -1,7 +1,6 @@
 
 import type {
   CampusSafetyPayload,
-  DigestPayload,
   IncidentsPayload,
   OccupancyPayload,
   OverviewKPIs,
@@ -10,7 +9,6 @@ import type {
   SIFilters,
 } from './types';
 import { defaultBellSchedule } from './bell-schedule';
-import { buildDemoDigest } from './digest';
 import { buildDemoIncidents, DEMO_INCIDENTS } from './incidents';
 import { buildDemoOccupancy } from './occupancy';
 import { calculateSchoolScores, DEMO_METRICS } from './safety-scores';
@@ -117,10 +115,6 @@ export async function getOccupancy(_filters: SIFilters): Promise<OccupancyPayloa
 
 export async function getIncidents(_filters: SIFilters): Promise<IncidentsPayload> {
   return buildDemoIncidents();
-}
-
-export async function getDigest(_filters: SIFilters): Promise<DigestPayload> {
-  return buildDemoDigest();
 }
 
 export { DEMO_INCIDENTS, DEMO_ZONES, DEMO_METRICS };

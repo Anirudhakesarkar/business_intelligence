@@ -226,6 +226,29 @@ export function listAcknowledgements(eventId: number) {
   return acks.filter((a) => a.eventId === eventId);
 }
 
+export function hasEventsLoaded(organizationId: number) {
+  return events.some((e) => e.organizationId === organizationId);
+}
+
+/** Replace in-memory events for an organization with rows loaded from Postgres. */
+export function hydrateEventsFromPg(
+  organizationId: number,
+  rows: IntelligenceEvent[],
+  ackRows: EventAcknowledgement[],
+) {
+  for (let i = events.length - 1; i >= 0; i--) {
+    if (events[i].organizationId === organizationId) events.splice(i, 1);
+  }
+  const loadedIds = new Set(rows.map((r) => r.id));
+  for (let i = acks.length - 1; i >= 0; i--) {
+    if (loadedIds.has(acks[i].eventId)) acks.splice(i, 1);
+  }
+  events.push(...rows);
+  acks.push(...ackRows);
+  for (const r of rows) if (r.id >= nextEventId) nextEventId = r.id + 1;
+  for (const a of ackRows) if (a.id >= nextAckId) nextAckId = a.id + 1;
+}
+
 export function listNotifications(organizationId: number, unreadOnly = false) {
   const rows = listEvents(organizationId);
   const filtered = unreadOnly

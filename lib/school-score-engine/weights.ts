@@ -17,7 +17,7 @@ export const DEFAULT_WEIGHTS: Record<ScoreModuleKey, number> = {
 export const MODULE_LABELS: Record<ScoreModuleKey, string> = {
   safety: 'Safety',
   security: 'Security',
-  teacher: 'Teacher Productivity',
+  teacher: 'Teacher & Staff Management',
   occupancy: 'Student Occupancy',
   academic: 'Academic Operations',
   staff: 'Staff Deployment',

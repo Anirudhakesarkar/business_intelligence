@@ -16,8 +16,8 @@ import {
 } from './store';
 
 describe('school-foundation', () => {
-  it('seed meets Phase 1 README minimums', () => {
-    const r = seedDemoSchool(1);
+  it('seed meets Phase 1 README minimums', async () => {
+    const r = await seedDemoSchool(1);
     assert.ok(r.counts.zones >= 20);
     assert.ok(r.counts.rooms >= 30);
     assert.ok(r.counts.cameras >= 25);
@@ -107,12 +107,13 @@ describe('school-foundation', () => {
       () =>
         createDutyRoster({
           organizationId: 1,
-          staffId: staff.id,
+          staffMemberId: staff.id,
           zoneId: zone.id,
           dutyType: 'Gate',
           dayOfWeek: 1,
           startTime: '15:00',
           endTime: '14:00',
+          isCriticalWindow: false,
         }),
       /End time must be after start time/
     );

@@ -146,15 +146,3 @@ export type IncidentsPayload = {
   avgResponseMinutes: number;
   slaBreachRate: number;
 };
-
-export type DigestSection = {
-  id: string;
-  title: string;
-  bullets: string[];
-};
-
-export type DigestPayload = {
-  generatedAt: string;
-  schoolName: string;
-  sections: DigestSection[];
-};

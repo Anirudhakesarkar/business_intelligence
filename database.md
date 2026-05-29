@@ -1,94 +1,98 @@
-# School Management Database Audit
+# School Intelligence Database Handoff
 
 Audit date: 2026-05-29  
-Last updated: 2026-05-29
+Last updated: 2026-05-29 (production go-live sign-off)
 
-Aligned with [agent.md](./agent.md). This file covers only School Management Postgres persistence.
+Aligned with [agent.md](./agent.md).
 
-## Current DB Status
+**Status: READY FOR PRODUCTION** — Postgres preflight clean, APIs mapped to live tables, org `1` seeded for operational validation.
 
-`GET /api/school-db/status` reports:
+## DB Preflight Status
+
+Live `GET /api/school-db/status`:
 
 | Item | Result |
 | --- | --- |
 | Postgres configured | true |
-| Postgres reachable | true |
+| `postgres.ok` | true |
 | Pending migrations | none |
 | Strict DB mode | true |
 | Snapshot enabled | false |
-| Production mode | true by environment |
-| Delete semantics | Documented under `schoolManagementDeleteSemantics` |
+| Demo UI enabled | false |
+| Production mode | true |
+| Orphan spatial rows | 0 zones, 0 rooms |
+| `cloud_zone_activity_summary` | 5760 rows |
 
-Applied migrations include `067_school_foundation.sql`, `074_school_campuses_align.sql`, `074_school_mgmt_cameras_align.sql`, and `075_school_demo_entity_tags.sql`.
+## Postgres Counts (org 1, date 2026-05-29)
 
-## Current Counts
+Verified via API on final audit:
 
-Run `npm run accept:school-management:strict` to refresh. The script clears untagged acceptance residue first, then seeds foundation if empty.
+| Table / check | Count / value |
+| --- | ---: |
+| `organizations` | 4 |
+| `school_demo_entity_tags` | 0 |
+| `school_campuses` | 1 (Main Campus) |
+| `school_zones` | 20 |
+| `school_rooms` | 30 |
+| `school_mgmt_cameras` | 45+ |
+| `school_intelligence_events` | 97 |
+| `school_event_acknowledgements` | ≥1 after lifecycle CRUD test |
+| Daily summary rows (2026-05-29) | 28 across module tables |
+| `school_daily_scores` (2026-05-29) | overall 48 |
+| `school_daily_module_scores` | 10 |
+| `school_gpt_summaries` | 1+ |
+| `school_gpt_recommendations` | 3+ |
 
-`school_sites` does not exist in the current database; use `school_campuses`.
+Organizations:
 
-## Cleanup Risk
-
-| Mechanism | What it removes |
-| --- | --- |
-| Demo cleanup | Only rows in `school_demo_entity_tags` |
-| Orphan spatial | Zones/rooms with no campus hierarchy link |
-| Acceptance residue | `*accept*` cameras (hard delete), inactive timetable/roster, acceptance calendar labels |
-
-Do not hard-delete production rows by name pattern alone without reviewing the acceptance-residue preview counts.
-
-## Tables In Scope
-
-`school_campuses`, `school_buildings`, `school_floors`, `school_zones`, `school_rooms`, `school_classes`, `school_sections`, `school_subjects`, `school_teachers`, `school_staff_members`, `school_mgmt_cameras`, `school_timetable_entries`, `school_calendars`, `school_staff_duty_rosters`, `school_demo_entity_tags`.
-
-## Transaction Paths To Re-verify
-
-| Operation | Expected persistence rule |
-| --- | --- |
-| Master data commit | Atomic Postgres commit through `master-data-import.ts` |
-| Camera import | Validate first (including zone/room existence); commit is transactional |
-| Timetable import | Validate first; commit appends active rows only |
-| Staff duty import | Validate first; commit appends active rows only |
-| Demo cleanup | Only removes tagged rows |
-| Orphan spatial cleanup | Only orphan zones/rooms from preview |
-| Calendar bulk | Upserts `school_calendars` transactionally |
-
-## Required DB Verification
-
-Automated in `scripts/school-management-acceptance.mjs` (strict): before/after counts, CRUD state, bulk commit, setup-health ↔ Postgres alignment.
-
-For manual UI work, pair each action with:
-
-```sql
-select count(*) from school_campuses;
-select count(*) from school_mgmt_cameras where status = 'Active';
-select count(*) from school_timetable_entries where is_active = true;
-select count(*) from school_staff_duty_rosters where is_active = true;
-```
-
-Residue investigation:
-
-```sql
-select id, camera_code, name, status from school_mgmt_cameras where camera_code ilike '%accept%' order by id desc;
-select id, is_active from school_timetable_entries order by id desc;
-select id, is_active from school_staff_duty_rosters order by id desc;
-```
-
-## Open DB Items
-
-| ID | Priority | Task |
+| id | code | name |
 | --- | --- | --- |
-| DB-P0-01 | P0 | **Done** — `acceptance-residue` preview/cleanup API + overview panel |
-| DB-P0-02 | P0 | **Done** — Camera DELETE → `status=Inactive` (documented on status API) |
-| DB-P0-03 | P0 | **Done** — Timetable/staff-duty DELETE → `is_active=false` (documented) |
-| DB-P0-04 | P0 | **Done (API)** — Master-data bulk in strict acceptance; optional browser sign-off |
-| DB-P0-05 | P0 | **Done** — Strict setup-health uses PG active-row counts (`setup-health-pg.ts`) |
+| 1 | null | Default Organization |
+| 2 | null | Eurokids |
+| 3 | `12345` | test_organization |
+| 4 | `DEMO-SCHOOL` | Demo School |
 
-## Environment
+## API ↔ Postgres Mapping
+
+| API | Postgres source | Hydration / write |
+| --- | --- | --- |
+| `/api/intelligence-events` | `school_intelligence_events`, `school_event_acknowledgements` | `ensureRuleEngineHydrated` |
+| Event ack / assign / resolve | same | `ensureEventHydrated` → mutate → `persistEventLifecycle` |
+| `/api/daily-summaries/*` | `school_*_daily_*` | `ensureDailySummariesForDate` |
+| `/api/school-scores/*` | `school_daily_scores`, `school_daily_module_scores` | `ensureSchoolDbHydrated` |
+| `/api/organizations` | `organizations` | direct query |
+| `/api/sites` | `school_campuses` | direct query (no demo fallback in production) |
+
+## Deploy Checklist
+
+1. Apply migrations: `npm run db:school:migrate`
+2. Confirm status: `curl -sS …/api/school-db/status` → `postgres.ok=true`, `pending=[]`
+3. Seed operational date: `npm run fill:school-intelligence-gaps -- YYYY-MM-DD`
+4. Verify counts:
 
 ```bash
-DATABASE_URL=postgresql://vms:vms@localhost:5432/vms
-SCHOOL_INTELLIGENCE_DB=1
-SCHOOL_SNAPSHOT=0
-SCHOOL_PRODUCTION_MODE=1
+curl -sS 'http://localhost:3002/api/school-db/status'
+curl -sS 'http://localhost:3002/api/intelligence-events?organizationId=1' | jq .count
+curl -sS 'http://localhost:3002/api/daily-summaries/overview?organizationId=1&date=YYYY-MM-DD'
+curl -sS 'http://localhost:3002/api/school-scores/overall?organizationId=1&date=YYYY-MM-DD'
+curl -sS 'http://localhost:3002/api/school-scores/modules?organizationId=1&date=YYYY-MM-DD'
 ```
+
+Expected: events > 0, overview rowCounts > 0, overall score non-null, modules list length 10.
+
+## Operational Notes
+
+| Topic | Guidance |
+| --- | --- |
+| New calendar dates | Run gap-fill or scheduled daily pipeline each day |
+| Event FK labels | Some events may show generic zone/camera IDs if upstream mapping changed; does not block read/update |
+| OpenAI | Set `OPENAI_API_KEY` for live GPT; otherwise GPT endpoints use demo mode |
+| Demo cleanup | Use guarded cleanup API with token `REMOVE_DEMO_DATA` only |
+
+## Gap-Fill Script
+
+```bash
+npm run fill:school-intelligence-gaps -- YYYY-MM-DD
+```
+
+Steps: orphan spatial cleanup → foundation seed (if empty) → daily pipeline (summaries, scores, GPT records) → prints verification counts.

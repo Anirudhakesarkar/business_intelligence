@@ -61,7 +61,7 @@ export function SchoolCopilotPanel({ organizationId = 1, date }: { organizationI
   async function seedFullPipeline() {
     setRegenerating(true);
     try {
-      await fetch(`/api/school-gpt/seed?organizationId=${organizationId}&date=${encodeURIComponent(date)}`, {
+      await fetch(`/api/school-intelligence/bootstrap?organizationId=${organizationId}&date=${encodeURIComponent(date)}`, {
         method: 'POST',
       });
       await load();

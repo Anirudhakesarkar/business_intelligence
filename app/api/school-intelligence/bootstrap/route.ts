@@ -10,11 +10,10 @@ export async function POST(req: NextRequest) {
   const result = await runDailySchoolIntelligenceJob({
     organizationId,
     date,
-    seedIfEmpty: true,
     includeGpt: true,
   });
   return json({
-    message: 'School Intelligence platform bootstrapped (Phases 1–6).',
+    message: 'School Intelligence pipeline run (Phases 3–6). Populate foundation data via School Management first.',
     ...result,
   });
 }

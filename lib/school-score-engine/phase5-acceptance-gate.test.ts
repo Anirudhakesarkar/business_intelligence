@@ -36,7 +36,10 @@ describe('Phase 5 acceptance gate', () => {
     const date = '2099-10-02';
     await seedDemoSchool(1);
     await seedSchoolDailySummariesPipeline(1, date);
-    const { overall, modules } = calculateScoresForDay(1, date);
+    const _result2 = calculateScoresForDay(1, date);
+    assert.equal(_result2.skipped, false);
+    const overall = _result2.overall!;
+    const modules = _result2.modules!;
     const moduleMap = Object.fromEntries(modules.map((m) => [m.moduleKey, { score: m.score }])) as Record<ScoreModuleKey, { score: number }>;
     assert.equal(overall.overallScore, computeOverallScore(moduleMap, DEFAULT_WEIGHTS));
   });
@@ -52,8 +55,12 @@ describe('Phase 5 acceptance gate', () => {
     const date = '2099-10-03';
     await seedDemoSchool(1);
     await seedSchoolDailySummariesPipeline(1, date);
-    const a = calculateScoresForDay(1, date).overall.overallScore;
-    assert.equal(calculateScoresForDay(1, date).overall.overallScore, a);
+    const _r1 = calculateScoresForDay(1, date);
+    assert.equal(_r1.skipped, false);
+    const a = _r1.overall!.overallScore;
+    const _r2 = calculateScoresForDay(1, date);
+    assert.equal(_r2.skipped, false);
+    assert.equal(_r2.overall!.overallScore, a);
     createWeightProfile(1, '2099-10-04', { ...DEFAULT_WEIGHTS, teacher: 0.22 });
     assert.equal(getOverallScore(1, date)!.overallScore, a);
     assert.ok(listWeightProfiles(1).length >= 2);
@@ -64,7 +71,9 @@ describe('Phase 5 acceptance gate', () => {
     const date = '2099-10-04';
     await seedDemoSchool(1);
     await seedSchoolDailySummariesPipeline(1, date);
-    const { modules } = calculateScoresForDay(1, date);
+    const _r3 = calculateScoresForDay(1, date);
+    assert.equal(_r3.skipped, false);
+    const modules = _r3.modules!;
     for (const m of modules) {
       assert.ok(typeof m.score === 'number');
       for (const d of m.drivers) {

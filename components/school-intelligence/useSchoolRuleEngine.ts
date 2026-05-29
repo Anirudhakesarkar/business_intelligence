@@ -1,40 +1,51 @@
 'use client';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-const ORG = 1;
 
 export type IntelligenceEventFilters = {
+  organizationId?: number;
   status?: string;
   from?: string;
   to?: string;
   eventType?: string;
   zoneId?: number;
+  siteId?: number;
 };
 
 export function useIntelligenceEvents(filters?: IntelligenceEventFilters) {
-  const q = new URLSearchParams({ organizationId: String(ORG) });
+  const organizationId = filters?.organizationId ?? 1;
+  const q = new URLSearchParams({ organizationId: String(organizationId) });
   if (filters?.status) q.set('status', filters.status);
   if (filters?.from) q.set('from', filters.from);
   if (filters?.to) q.set('to', filters.to);
   if (filters?.eventType) q.set('eventType', filters.eventType);
   if (filters?.zoneId != null) q.set('zoneId', String(filters.zoneId));
+  if (filters?.siteId != null) q.set('siteId', String(filters.siteId));
   return useQuery({
     queryKey: ['intel-events', q.toString()],
-    queryFn: async () => (await fetch(`/api/intelligence-events?${q}`)).json(),
+    queryFn: async () => {
+      const res = await fetch(`/api/intelligence-events?${q}`);
+      if (!res.ok) throw new Error(`Events API returned ${res.status}`);
+      return res.json();
+    },
   });
 }
 
 export function useIntelligenceEvent(id: number) {
   return useQuery({
     queryKey: ['intel-event', id],
-    queryFn: async () => (await fetch(`/api/intelligence-events/${id}`)).json(),
+    queryFn: async () => {
+      const res = await fetch(`/api/intelligence-events/${id}`);
+      if (!res.ok) throw new Error(`Event API returned ${res.status}`);
+      return res.json();
+    },
     enabled: id > 0,
   });
 }
 
-export function useIntelligenceRules() {
+export function useIntelligenceRules(organizationId = 1) {
   return useQuery({
-    queryKey: ['intel-rules', ORG],
-    queryFn: async () => (await fetch(`/api/intelligence-rules?organizationId=${ORG}`)).json(),
+    queryKey: ['intel-rules', organizationId],
+    queryFn: async () => (await fetch(`/api/intelligence-rules?organizationId=${organizationId}`)).json(),
   });
 }
 
@@ -53,14 +64,14 @@ export function useSeedRuleEngine() {
   });
 }
 
-export function useEvaluateRules() {
+export function useEvaluateRules(organizationId = 1) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async () => {
       const res = await fetch('/api/school-rule-engine/evaluate', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ organizationId: ORG }),
+        body: JSON.stringify({ organizationId }),
       });
       if (!res.ok) throw new Error('Evaluate failed');
       return res.json();

@@ -1,25 +1,41 @@
 'use client';
 
-import Link from 'next/link';
-import { useState, useCallback, useEffect } from 'react';
-import { Calendar, Camera, Wifi, WifiOff, AlertTriangle, CheckCircle2, Flame, Activity, Loader2, ShieldAlert } from 'lucide-react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
+import { CampusSafetyScorePanel } from '@/components/school-intelligence/campus-safety/CampusSafetyScorePanel';
+import { SafetyEventFeed, type ObservationFilter } from '@/components/school-intelligence/campus-safety/SafetyEventFeed';
+import { useSchoolOverallScore, useSchoolScoreCompare } from '@/components/school-intelligence/useSchoolScores';
+import {
+  formatSIFilterPeriodLabel,
+  isInstantInSIFilterPeriod,
+  periodLengthDays,
+  resolveSIFilterDates,
+  resolveSIFilterInstantBounds,
+  scoreCompareLabel,
+} from '@/lib/school-intelligence/date-range';
+import {
+  WifiOff,
+  AlertTriangle,
+  Flame,
+  ShieldAlert,
+  BarChart3,
+  DoorOpen,
+  Users,
+} from 'lucide-react';
+import {
+  CAMPUS_SAFETY_CRITICAL_TYPES,
+  CAMPUS_SAFETY_EVENT_TYPES,
+  CAMPUS_SAFETY_HIGH_TYPES,
+  CAMPUS_SAFETY_OBSERVATION_TYPES,
+  CAMPUS_SAFETY_TYPE_LABELS,
+} from '@/lib/school-intelligence/campus-safety-observation-types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { usePageHeaderRefresh } from '@/components/layout/page-header-context';
 import { SchoolIntelligenceBreadcrumbs } from '@/components/school-intelligence/SchoolIntelligenceBreadcrumbs';
-import { useSchoolModuleScore } from '@/components/school-intelligence/useSchoolModuleScore';
-import { todayIso } from '@/components/school-intelligence/useSchoolDailySummaries';
-
-const ORG_ID = 1;
-
-// Safety-critical event types
-const SAFETY_EVENT_TYPES = [
-  'FallDetected', 'FireSmokeDetected', 'CriticalCameraOffline', 'EmergencyExitCrowding',
-  'FireExitObstruction', 'RestrictedZoneEntry', 'ServerRoomEntry', 'UnsafeClimbing',
-  'RunningDetected', 'Loitering', 'VehicleStudentOverlap',
-];
-
-const CRITICAL_EVENT_TYPES = ['FallDetected', 'FireSmokeDetected', 'FireExitObstruction', 'EmergencyExitCrowding'];
-const HIGH_EVENT_TYPES = ['CriticalCameraOffline', 'RestrictedZoneEntry', 'ServerRoomEntry', 'VehicleStudentOverlap'];
+import { SIFilterBar } from '@/components/school-intelligence/SIFilterBar';
+import { resolveOrganizationId } from '@/lib/school-intelligence/resolve-org-id';
+import { useCameras, useZones } from '@/components/school-management/useSchoolFoundation';
+import { useQuery } from '@tanstack/react-query';
+import type { SIFilters } from '@/lib/school-intelligence/types';
 
 type SafetyEvent = {
   id: number;
@@ -29,223 +45,381 @@ type SafetyEvent = {
   startedAt: string;
   evidence: { summary: string };
   cameraId?: number;
-};
-
-type CameraHealthEntry = {
-  cameraId: number;
-  currentStatus: string;
-  consecutiveOfflineMinutes: number;
-};
-
-const SEVERITY_COLORS: Record<string, string> = {
-  Critical: 'text-red-400 bg-red-500/10 border-red-500/30',
-  High: 'text-orange-400 bg-orange-500/10 border-orange-500/30',
-  Medium: 'text-amber-400 bg-amber-500/10 border-amber-500/30',
-  Low: 'text-blue-400 bg-blue-500/10 border-blue-500/30',
-};
-
-const SEVERITY_LEFT: Record<string, string> = {
-  Critical: 'border-l-red-500',
-  High: 'border-l-orange-500',
-  Medium: 'border-l-amber-500',
-  Low: 'border-l-blue-400',
+  zoneId?: number;
 };
 
 const EVENT_ICONS: Record<string, React.ReactNode> = {
   FallDetected: <AlertTriangle className="h-4 w-4 text-red-400" />,
   FireSmokeDetected: <Flame className="h-4 w-4 text-red-500" />,
   FireExitObstruction: <Flame className="h-4 w-4 text-orange-400" />,
-  EmergencyExitCrowding: <AlertTriangle className="h-4 w-4 text-red-400" />,
+  EmergencyExitCrowding: <DoorOpen className="h-4 w-4 text-red-400" />,
   CriticalCameraOffline: <WifiOff className="h-4 w-4 text-amber-400" />,
   RestrictedZoneEntry: <ShieldAlert className="h-4 w-4 text-orange-400" />,
+  ServerRoomEntry: <ShieldAlert className="h-4 w-4 text-orange-400" />,
+  UnsafeClimbing: <AlertTriangle className="h-4 w-4 text-amber-400" />,
+  RunningDetected: <AlertTriangle className="h-4 w-4 text-blue-400" />,
+  Loitering: <Users className="h-4 w-4 text-amber-400" />,
+  VehicleStudentOverlap: <AlertTriangle className="h-4 w-4 text-orange-400" />,
 };
 
-function ScoreGauge({ label, score, weight, loading }: { label: string; score: number | null; weight: number; loading: boolean }) {
-  const pct = score ?? 0;
-  const color = pct >= 80 ? 'bg-green-500' : pct >= 60 ? 'bg-amber-500' : 'bg-red-500';
-  const textColor = pct >= 80 ? 'text-green-300' : pct >= 60 ? 'text-amber-300' : 'text-red-300';
+const TYPE_GRID_ICONS: Record<string, React.ReactNode> = {
+  FallDetected: <AlertTriangle className="h-3.5 w-3.5 text-red-400" />,
+  FireSmokeDetected: <Flame className="h-3.5 w-3.5 text-red-500" />,
+  FireExitObstruction: <Flame className="h-3.5 w-3.5 text-orange-400" />,
+  EmergencyExitCrowding: <DoorOpen className="h-3.5 w-3.5 text-red-400" />,
+  CriticalCameraOffline: <WifiOff className="h-3.5 w-3.5 text-amber-400" />,
+  RestrictedZoneEntry: <ShieldAlert className="h-3.5 w-3.5 text-orange-400" />,
+  ServerRoomEntry: <ShieldAlert className="h-3.5 w-3.5 text-orange-400" />,
+  UnsafeClimbing: <AlertTriangle className="h-3.5 w-3.5 text-amber-400" />,
+  RunningDetected: <AlertTriangle className="h-3.5 w-3.5 text-blue-400" />,
+  Loitering: <Users className="h-3.5 w-3.5 text-amber-400" />,
+  VehicleStudentOverlap: <AlertTriangle className="h-3.5 w-3.5 text-orange-400" />,
+};
+
+type IncidentBucket = { key: string; label: string; subLabel?: string; count: number };
+
+function addDays(iso: string, days: number): string {
+  const d = new Date(`${iso}T12:00:00`);
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+function formatDayLabel(iso: string): string {
+  const d = new Date(`${iso}T12:00:00`);
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+function formatWeekday(iso: string): string {
+  const d = new Date(`${iso}T12:00:00`);
+  return d.toLocaleDateString('en-US', { weekday: 'short' });
+}
+
+function formatMonthLabel(iso: string): string {
+  const d = new Date(`${iso}T12:00:00`);
+  return d.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+}
+
+/** Build time buckets from the active date-range filter. */
+function buildIncidentBuckets(filters: SIFilters): Omit<IncidentBucket, 'count'>[] {
+  const { from, to } = resolveSIFilterDates(filters);
+  const dayCount = periodLengthDays(from, to);
+
+  if (filters.dateRange === '24h') {
+    const end = Date.now();
+    return Array.from({ length: 12 }).map((_, i) => {
+      const slotEnd = new Date(end - (11 - i) * 2 * 60 * 60 * 1000);
+      const label = slotEnd.toLocaleTimeString('en-US', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+      });
+      return { key: `h-${i}`, label };
+    });
+  }
+
+  if (dayCount <= 31) {
+    const buckets: Omit<IncidentBucket, 'count'>[] = [];
+    let cur = from;
+    while (cur <= to) {
+      buckets.push({
+        key: cur,
+        label: formatDayLabel(cur),
+        subLabel: formatWeekday(cur),
+      });
+      cur = addDays(cur, 1);
+    }
+    return buckets;
+  }
+
+  // Longer custom ranges: group by month
+  const buckets: Omit<IncidentBucket, 'count'>[] = [];
+  const start = new Date(`${from}T12:00:00`);
+  const end = new Date(`${to}T12:00:00`);
+  const cursor = new Date(start.getFullYear(), start.getMonth(), 1);
+  while (cursor <= end) {
+    const key = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}`;
+    buckets.push({ key, label: formatMonthLabel(`${key}-01`) });
+    cursor.setMonth(cursor.getMonth() + 1);
+  }
+  return buckets;
+}
+
+function countEventsInBucket(events: SafetyEvent[], bucketKey: string, filters: SIFilters): number {
+  if (filters.dateRange === '24h') {
+    const slotIndex = Number(bucketKey.replace('h-', ''));
+    const { to: endIso } = resolveSIFilterInstantBounds(filters);
+    const endMs = new Date(endIso).getTime();
+    const slotEnd = endMs - (11 - slotIndex) * 2 * 60 * 60 * 1000;
+    const slotStart = slotEnd - 2 * 60 * 60 * 1000;
+    return events.filter((e) => {
+      const t = new Date(e.startedAt).getTime();
+      return t >= slotStart && t < slotEnd;
+    }).length;
+  }
+
+  if (bucketKey.includes('-') && bucketKey.length === 7) {
+    return events.filter((e) => e.startedAt.slice(0, 7) === bucketKey).length;
+  }
+
+  return events.filter((e) => e.startedAt.slice(0, 10) === bucketKey).length;
+}
+
+function buildIncidentChartData(events: SafetyEvent[], filters: SIFilters): IncidentBucket[] {
+  const buckets = buildIncidentBuckets(filters);
+  return buckets.map((b) => ({
+    ...b,
+    count: countEventsInBucket(events, b.key, filters),
+  }));
+}
+
+function SafetyIncidentBarChart({
+  buckets,
+  periodLabel,
+}: {
+  buckets: IncidentBucket[];
+  periodLabel: string;
+}) {
+  const total = buckets.reduce((sum, b) => sum + b.count, 0);
+  const max = Math.max(...buckets.map((b) => b.count), 1);
+
   return (
-    <Card className="border-slate-800 bg-slate-900/60">
-      <CardContent className="p-4">
-        <div className="flex items-end justify-between">
-          <div>
-            <p className="text-xs text-slate-500">{label}</p>
-            <p className={`text-3xl font-bold ${loading ? 'text-slate-600' : textColor}`}>
-              {loading ? '…' : score ?? '—'}
-            </p>
-            <p className="text-xs text-slate-600">weight {Math.round(weight * 100)}%</p>
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-end justify-between gap-3 border-b border-slate-800/80 pb-3">
+        <div>
+          <p className="text-3xl font-bold tabular-nums tracking-tight text-slate-100">{total}</p>
+          <p className="text-xs text-slate-500">Total observations · {periodLabel}</p>
+        </div>
+        <p className="text-[11px] text-slate-600">
+          {buckets.length} {buckets.length === 1 ? 'bucket' : 'buckets'} in range
+        </p>
+      </div>
+
+      <div className="overflow-x-auto rounded-lg border border-slate-800/60 bg-slate-950/30 px-3 py-4">
+        <div className="relative h-32 min-w-0">
+          <div
+            className="pointer-events-none absolute inset-0 flex flex-col justify-between"
+            aria-hidden
+          >
+            {[0, 1, 2, 3].map((i) => (
+              <div key={i} className="border-t border-dashed border-slate-800/60" />
+            ))}
           </div>
-          <div className="text-right">
-            <p className="text-xs text-slate-500">/ 100</p>
+          <div className="relative flex h-full min-w-0 items-end gap-2 sm:gap-2.5">
+            {buckets.map((b) => {
+              const heightPct = (b.count / max) * 100;
+              const barHeightPct = Math.max(heightPct, b.count > 0 ? 14 : 2);
+              const barHeight = b.count > 0
+                ? `max(1.5rem, calc(8rem * ${barHeightPct} / 100))`
+                : '2px';
+              return (
+                <div
+                  key={b.key}
+                  className="flex h-full min-w-[2.75rem] flex-1 flex-col justify-end items-center sm:min-w-[3rem]"
+                  title={`${b.subLabel ? `${b.subLabel}, ` : ''}${b.label}: ${b.count} observation${b.count === 1 ? '' : 's'}`}
+                >
+                  {b.count > 0 && (
+                    <span className="mb-0.5 w-full shrink-0 text-center text-[10px] font-bold leading-none tabular-nums text-slate-200 sm:text-[11px]">
+                      {b.count}
+                    </span>
+                  )}
+                  <div
+                    className="w-full overflow-hidden rounded-t-md bg-gradient-to-t from-sky-700 to-sky-400 shadow-sm shadow-sky-950/40 transition-all hover:from-sky-600 hover:to-sky-300"
+                    style={{ height: barHeight }}
+                  />
+                </div>
+              );
+            })}
           </div>
         </div>
-        <div className="mt-3 h-2 rounded-full bg-slate-800">
-          <div className={`h-2 rounded-full transition-all ${color}`} style={{ width: `${pct}%` }} />
+        <div className="mt-2 flex min-w-0 gap-2 sm:gap-2.5">
+          {buckets.map((b) => (
+            <div
+              key={b.key}
+              className="flex min-w-[2.75rem] flex-1 flex-col items-center gap-0.5 text-center sm:min-w-[3rem]"
+              title={b.subLabel ? `${b.subLabel}, ${b.label}` : b.label}
+            >
+              <span className="w-full truncate text-[9px] leading-tight text-slate-500 sm:text-[10px]">
+                {b.label}
+              </span>
+              {b.subLabel && (
+                <span className="w-full truncate text-[8px] leading-tight text-slate-600 sm:text-[9px]">
+                  {b.subLabel}
+                </span>
+              )}
+            </div>
+          ))}
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }
 
 export default function CampusSafetyPage() {
-  const [date, setDate] = useState(todayIso);
-  const [statusFilter, setStatusFilter] = useState<'Open' | 'All'>('Open');
-  const [events, setEvents] = useState<SafetyEvent[]>([]);
-  const [cameraHealth, setCameraHealth] = useState<CameraHealthEntry[]>([]);
-  const [eventsLoading, setEventsLoading] = useState(true);
-  const [healthLoading, setHealthLoading] = useState(true);
+  const [filters, setFilters] = useState<SIFilters>({ organizationId: '', siteId: '', dateRange: '7d' });
+  const orgId = resolveOrganizationId(filters);
+  const { data: zonesData } = useZones();
+  const { data: camerasPayload } = useCameras();
+  const { data: floorsData } = useQuery({
+    queryKey: ['campus-safety-floors', orgId],
+    queryFn: async () => (await fetch('/api/floors')).json(),
+  });
+  const { data: buildingsData } = useQuery({
+    queryKey: ['campus-safety-buildings', orgId],
+    queryFn: async () => (await fetch('/api/buildings')).json(),
+  });
+  const zones = Array.isArray(zonesData) ? (zonesData as { id: number; floorId?: number }[]) : [];
+  const cameras =
+    (camerasPayload as { cameras?: { id: number; zoneId?: number }[] })?.cameras ?? [];
+  const floors = Array.isArray(floorsData) ? (floorsData as { id: number; buildingId: number }[]) : [];
+  const buildings = Array.isArray(buildingsData) ? (buildingsData as { id: number; siteId: number }[]) : [];
+  const zoneToSiteId = useMemo(() => {
+    const m = new Map<number, number>();
+    for (const z of zones) {
+      if (!z.floorId) continue;
+      const fl = floors.find((f) => f.id === z.floorId);
+      if (!fl) continue;
+      const b = buildings.find((bb) => bb.id === fl.buildingId);
+      if (b) m.set(z.id, b.siteId);
+    }
+    return m;
+  }, [zones, floors, buildings]);
 
-  const safetyScore = useSchoolModuleScore('safety', ORG_ID, date);
-  const securityScore = useSchoolModuleScore('security', ORG_ID, date);
+  const matchesSiteFilter = useCallback(
+    (event: SafetyEvent) => {
+      if (!filters.siteId) return true;
+      const sid = Number(filters.siteId);
+      const cam = event.cameraId ? cameras.find((c) => c.id === event.cameraId) : undefined;
+      const zid = event.zoneId ?? cam?.zoneId;
+      const siteId = zid != null ? zoneToSiteId.get(zid) : undefined;
+      return siteId === sid;
+    },
+    [filters.siteId, cameras, zoneToSiteId],
+  );
+
+  const [observationFilter, setObservationFilter] = useState<ObservationFilter>('priority');
+  const [events, setEvents] = useState<SafetyEvent[]>([]);
+  const [eventsLoading, setEventsLoading] = useState(true);
+  const [eventsError, setEventsError] = useState<string | null>(null);
+
+  const { to: summaryDate, from: periodStart } = resolveSIFilterDates(filters);
+  const periodLabel = formatSIFilterPeriodLabel(filters);
+  const compareLabel = scoreCompareLabel(filters.dateRange, periodStart, summaryDate);
+  const scores = useSchoolOverallScore(orgId, summaryDate, filters.dateRange);
+  const scoreCompare = useSchoolScoreCompare(orgId, filters);
 
   const loadEvents = useCallback(async () => {
     setEventsLoading(true);
+    setEventsError(null);
     try {
-      const q = new URLSearchParams({ organizationId: String(ORG_ID) });
-      if (statusFilter !== 'All') q.set('status', statusFilter);
+      const { from, to } = resolveSIFilterInstantBounds(filters);
+      const q = new URLSearchParams({
+        organizationId: String(orgId),
+        from,
+        to,
+      });
       const res = await fetch(`/api/intelligence-events?${q}`);
+      if (!res.ok) throw new Error(`Events API returned ${res.status}`);
       const data = await res.json();
       const allEvents: SafetyEvent[] = data.events ?? [];
-      // Filter to safety-relevant event types
-      setEvents(allEvents.filter((e) => SAFETY_EVENT_TYPES.includes(e.eventType)));
+      const safetyEvents = allEvents
+        .filter((e) => CAMPUS_SAFETY_EVENT_TYPES.includes(e.eventType))
+        .filter((e) => isInstantInSIFilterPeriod(e.startedAt, filters))
+        .filter(matchesSiteFilter);
+      setEvents(safetyEvents);
+    } catch (e) {
+      setEvents([]);
+      setEventsError(e instanceof Error ? e.message : 'Failed to load events');
     } finally {
       setEventsLoading(false);
     }
-  }, [statusFilter]);
+  }, [filters, orgId, matchesSiteFilter]);
 
-  const loadHealth = useCallback(async () => {
-    setHealthLoading(true);
-    try {
-      const res = await fetch(`/api/camera-health?organizationId=${ORG_ID}`);
-      const grid = (await res.json()) as Array<{
-        camera: { id: number };
-        freshness: { stale: boolean };
-        latestHealth?: { healthStatus: string };
-      }>;
-      setCameraHealth(
-        (Array.isArray(grid) ? grid : []).map((row) => {
-          const ev = row.latestHealth?.healthStatus;
-          let currentStatus = 'Online';
-          if (ev === 'Tampered') currentStatus = 'Tampered';
-          else if (ev === 'Unstable') currentStatus = 'Unstable';
-          else if (ev === 'Maintenance') currentStatus = 'Maintenance';
-          else if (row.freshness.stale || ev === 'Offline') currentStatus = 'Offline';
-          return {
-            cameraId: row.camera.id,
-            currentStatus,
-            consecutiveOfflineMinutes: 0,
-          };
-        }),
-      );
-    } finally {
-      setHealthLoading(false);
-    }
-  }, []);
+  useEffect(() => { void loadEvents(); }, [loadEvents]);
 
-  useEffect(() => { loadEvents(); }, [loadEvents]);
-  useEffect(() => { loadHealth(); }, [loadHealth]);
+  const periodEvents = useMemo(
+    () => events.filter((e) => isInstantInSIFilterPeriod(e.startedAt, filters)),
+    [events, filters],
+  );
 
-  const offlineCameras = cameraHealth.filter((c) => c.currentStatus === 'Offline' || c.currentStatus === 'Tampered');
-  const onlineCameras = cameraHealth.filter((c) => c.currentStatus === 'Online');
-  const criticalEvents = events.filter((e) => CRITICAL_EVENT_TYPES.includes(e.eventType));
-  const highEvents = events.filter((e) => HIGH_EVENT_TYPES.includes(e.eventType));
-  const openCount = events.filter((e) => e.status === 'Open').length;
+  const criticalEvents = periodEvents.filter((e) => CAMPUS_SAFETY_CRITICAL_TYPES.includes(e.eventType));
+  const highEvents = periodEvents.filter((e) => CAMPUS_SAFETY_HIGH_TYPES.includes(e.eventType));
+  const priorityCount = periodEvents.filter(
+    (e) => e.severity === 'Critical' || e.severity === 'High',
+  ).length;
+
+  const displayedObservations = useMemo(() => {
+    const base =
+      observationFilter === 'priority'
+        ? periodEvents.filter((e) => e.severity === 'Critical' || e.severity === 'High')
+        : periodEvents;
+    return [...base].sort(
+      (a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime(),
+    );
+  }, [periodEvents, observationFilter]);
+
+  const incidentChart = useMemo(
+    () => buildIncidentChartData(periodEvents, filters),
+    [periodEvents, filters],
+  );
 
   const handleRefresh = useCallback(() => {
-    loadEvents();
-    loadHealth();
-    safetyScore.reload();
-    securityScore.reload();
-  }, [loadEvents, loadHealth, safetyScore, securityScore]);
+    void loadEvents();
+    void scores.reload();
+    void scoreCompare.reload();
+  }, [loadEvents, scores.reload, scoreCompare.reload]);
 
   usePageHeaderRefresh(handleRefresh);
 
   return (
     <div className="space-y-6">
       <SchoolIntelligenceBreadcrumbs current="Campus Safety" />
-      <div className="flex flex-wrap items-center justify-end gap-2">
-        <label className="flex items-center gap-2 text-sm text-slate-400">
-          <Calendar className="h-4 w-4" />
-          <input
-            type="date"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-            className="rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100"
-          />
-        </label>
-      </div>
+      <SIFilterBar filters={filters} onChange={setFilters} />
 
-      {/* Score gauges */}
-      <div className="grid gap-4 sm:grid-cols-2">
-        <ScoreGauge label="Safety Score" score={safetyScore.score} weight={0.2} loading={safetyScore.loading} />
-        <ScoreGauge label="Security Score" score={securityScore.score} weight={0.1} loading={securityScore.loading} />
-      </div>
+      {eventsError && (
+        <div className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
+          Failed to load safety events: {eventsError}
+        </div>
+      )}
 
-      {/* Camera health summary */}
-      <Card className={`border ${offlineCameras.length > 0 ? 'border-red-900/50 bg-red-950/10' : 'border-green-900/40 bg-green-950/10'}`}>
+      {(scores.error || scoreCompare.error) && (
+        <div className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
+          {scores.error && <p>Scores: {scores.error}</p>}
+          {scoreCompare.error && <p>Score comparison: {scoreCompare.error}</p>}
+        </div>
+      )}
+
+      <Card className="border-slate-800 bg-slate-900/60">
         <CardHeader className="pb-2">
           <CardTitle className="flex items-center gap-2 text-sm text-slate-200">
-            <Camera className="h-4 w-4" /> Camera Health
+            <BarChart3 className="h-4 w-4 text-sky-400" aria-hidden />
+            Observation trend
           </CardTitle>
+          <p className="text-xs font-normal text-slate-500">{periodLabel}</p>
         </CardHeader>
         <CardContent>
-          {healthLoading ? (
-            <p className="flex items-center gap-2 text-sm text-slate-500"><Loader2 className="h-4 w-4 animate-spin" /> Loading…</p>
-          ) : cameraHealth.length === 0 ? (
-            <p className="text-sm text-slate-500">No camera health data. Seed AI signals to populate.</p>
-          ) : (
-            <div className="space-y-3">
-              <div className="grid grid-cols-3 gap-3">
-                <div className="rounded-md border border-green-900/40 bg-green-950/20 p-3 text-center">
-                  <Wifi className="mx-auto mb-1 h-4 w-4 text-green-400" />
-                  <p className="text-xl font-bold text-green-300">{onlineCameras.length}</p>
-                  <p className="text-xs text-green-500">Online</p>
-                </div>
-                <div className="rounded-md border border-red-900/40 bg-red-950/20 p-3 text-center">
-                  <WifiOff className="mx-auto mb-1 h-4 w-4 text-red-400" />
-                  <p className="text-xl font-bold text-red-300">{offlineCameras.length}</p>
-                  <p className="text-xs text-red-500">Offline/Tampered</p>
-                </div>
-                <div className="rounded-md border border-slate-700 bg-slate-800/50 p-3 text-center">
-                  <Activity className="mx-auto mb-1 h-4 w-4 text-slate-400" />
-                  <p className="text-xl font-bold text-slate-200">{cameraHealth.length}</p>
-                  <p className="text-xs text-slate-500">Total</p>
-                </div>
-              </div>
-
-              {offlineCameras.length > 0 && (
-                <div className="rounded-md border border-red-900/40 bg-red-950/10 p-3">
-                  <p className="mb-2 text-xs font-semibold text-red-400">⚠ Offline / Tampered Cameras</p>
-                  <ul className="space-y-1">
-                    {offlineCameras.map((c) => (
-                      <li key={c.cameraId} className="flex items-center justify-between text-xs">
-                        <span className="text-slate-300">Camera #{c.cameraId}</span>
-                        <span className="text-red-400">
-                          {c.currentStatus}
-                          {c.consecutiveOfflineMinutes > 0 && ` · ${c.consecutiveOfflineMinutes}m`}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </div>
-          )}
+          <SafetyIncidentBarChart buckets={incidentChart} periodLabel={periodLabel} />
         </CardContent>
       </Card>
 
-      {/* Alert summary row */}
+      {/* Observation summary */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Card className={`border ${openCount > 0 ? 'border-red-900/40 bg-red-950/10' : 'border-slate-800 bg-slate-900/50'}`}>
+        <Card className="border-slate-800 bg-slate-900/50">
           <CardContent className="p-3">
-            <p className="text-xs text-slate-500">Open events</p>
-            <p className={`text-2xl font-bold ${openCount > 0 ? 'text-red-300' : 'text-green-300'}`}>{openCount}</p>
+            <p className="text-xs text-slate-500">Observations</p>
+            <p className="text-2xl font-bold text-slate-200">{periodEvents.length}</p>
+            <p className="mt-0.5 truncate text-[10px] text-slate-600">{periodLabel}</p>
           </CardContent>
         </Card>
         <Card className={`border ${criticalEvents.length > 0 ? 'border-red-900/50 bg-red-950/20' : 'border-slate-800 bg-slate-900/50'}`}>
           <CardContent className="p-3">
-            <p className="text-xs text-slate-500">Critical incidents</p>
+            <p className="text-xs text-slate-500">Critical observations</p>
             <p className={`text-2xl font-bold ${criticalEvents.length > 0 ? 'text-red-300' : 'text-slate-400'}`}>{criticalEvents.length}</p>
+          </CardContent>
+        </Card>
+        <Card className={`border ${priorityCount > 0 ? 'border-orange-900/40 bg-orange-950/10' : 'border-slate-800 bg-slate-900/50'}`}>
+          <CardContent className="p-3">
+            <p className="text-xs text-slate-500">High priority</p>
+            <p className={`text-2xl font-bold ${priorityCount > 0 ? 'text-orange-300' : 'text-slate-400'}`}>{priorityCount}</p>
           </CardContent>
         </Card>
         <Card className={`border ${highEvents.length > 0 ? 'border-orange-900/40 bg-orange-950/10' : 'border-slate-800 bg-slate-900/50'}`}>
@@ -254,143 +428,91 @@ export default function CampusSafetyPage() {
             <p className={`text-2xl font-bold ${highEvents.length > 0 ? 'text-orange-300' : 'text-slate-400'}`}>{highEvents.length}</p>
           </CardContent>
         </Card>
-        <Card className="border-slate-800 bg-slate-900/50">
-          <CardContent className="p-3">
-            <p className="text-xs text-slate-500">Total safety events</p>
-            <p className="text-2xl font-bold text-slate-200">{events.length}</p>
-          </CardContent>
-        </Card>
       </div>
 
       {/* Event type coverage */}
       <Card className="border-slate-800 bg-slate-900/60">
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm text-slate-300">Safety Event Types</CardTitle>
+          <CardTitle className="text-sm text-slate-300">
+            Observation types
+            <span className="ml-2 font-normal text-slate-500">· {periodLabel}</span>
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-            {SAFETY_EVENT_TYPES.map((type) => {
-              const count = events.filter((e) => e.eventType === type).length;
-              const isCritical = CRITICAL_EVENT_TYPES.includes(type);
-              const isHigh = HIGH_EVENT_TYPES.includes(type);
+            {CAMPUS_SAFETY_OBSERVATION_TYPES.map((typeCfg) => {
+              const count = periodEvents.filter((e) => e.eventType === typeCfg.type).length;
+              const isCritical = typeCfg.isCritical ?? false;
+              const isHigh = typeCfg.isHigh ?? false;
               return (
-                <Link
-                  key={type}
-                  href={`/dashboard/school-intelligence/events?eventType=${type}&status=Open`}
-                  className={`flex items-center justify-between rounded-md border p-2.5 text-xs transition-colors hover:border-sky-700 ${
+                <div
+                  key={typeCfg.type}
+                  className={`flex flex-col gap-1 rounded-md border p-2.5 text-xs ${
                     count > 0
-                      ? isCritical ? 'border-red-900/50 bg-red-950/20' : isHigh ? 'border-orange-900/40 bg-orange-950/10' : 'border-amber-900/30 bg-amber-950/10'
+                      ? isCritical
+                        ? 'border-red-900/50 bg-red-950/20'
+                        : isHigh
+                          ? 'border-orange-900/40 bg-orange-950/10'
+                          : 'border-amber-900/30 bg-amber-950/10'
                       : 'border-slate-800 bg-slate-900/40'
                   }`}
                 >
-                  <span className="flex items-center gap-1.5">
-                    {EVENT_ICONS[type] ?? <ShieldAlert className="h-3.5 w-3.5 text-slate-500" />}
-                    <span className={count > 0 ? 'text-slate-200' : 'text-slate-500'}>{type}</span>
-                  </span>
-                  {count > 0 ? (
-                    <span className={`rounded-full px-1.5 py-0.5 text-xs font-medium ${isCritical ? 'bg-red-500/20 text-red-300' : 'bg-amber-500/20 text-amber-300'}`}>
-                      {count}
+                  <div className="flex items-start justify-between gap-2">
+                    <span className="flex min-w-0 items-center gap-1.5">
+                      {TYPE_GRID_ICONS[typeCfg.type] ?? (
+                        <ShieldAlert className="h-3.5 w-3.5 shrink-0 text-slate-500" />
+                      )}
+                      <span className={count > 0 ? 'text-slate-200' : 'text-slate-500'}>
+                        {typeCfg.label}
+                      </span>
                     </span>
-                  ) : (
-                    <CheckCircle2 className="h-3.5 w-3.5 text-green-600" />
-                  )}
-                </Link>
+                    {count > 0 ? (
+                      <span
+                        className={`shrink-0 rounded-full px-1.5 py-0.5 text-xs font-medium ${
+                          isCritical
+                            ? 'bg-red-500/20 text-red-300'
+                            : 'bg-amber-500/20 text-amber-300'
+                        }`}
+                      >
+                        {count}
+                      </span>
+                    ) : (
+                      <span className="shrink-0 text-[10px] text-slate-600">—</span>
+                    )}
+                  </div>
+                  <p className="line-clamp-2 pl-5 text-[10px] leading-snug text-slate-500">
+                    {typeCfg.description}
+                  </p>
+                </div>
               );
             })}
           </div>
         </CardContent>
       </Card>
 
-      {/* Live event feed */}
-      <div>
-        <div className="mb-3 flex items-center justify-between">
-          <p className="text-sm font-medium text-slate-200">Safety Event Feed</p>
-          <div className="flex rounded border border-slate-700 overflow-hidden text-xs">
-            {(['Open', 'All'] as const).map((s) => (
-              <button
-                key={s}
-                onClick={() => setStatusFilter(s)}
-                className={`px-3 py-1.5 transition-colors ${statusFilter === s ? 'bg-sky-700 text-white' : 'text-slate-400 hover:bg-slate-800'}`}
-              >
-                {s}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {eventsLoading ? (
-          <p className="flex items-center gap-2 text-sm text-slate-500"><Loader2 className="h-4 w-4 animate-spin" /> Loading events…</p>
-        ) : events.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-slate-700 p-6 text-center">
-            <CheckCircle2 className="mx-auto mb-2 h-8 w-8 text-green-600" />
-            <p className="text-sm text-slate-400">No {statusFilter === 'Open' ? 'open ' : ''}safety events.</p>
-            <p className="mt-1 text-xs text-slate-600">
-              Seed signals → evaluate rules to generate safety events.
-            </p>
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {events.map((e) => (
-              <Link
-                key={e.id}
-                href={`/dashboard/school-intelligence/events/${e.id}`}
-                className={`flex items-start gap-3 rounded-lg border border-l-4 border-slate-800 p-3 transition-colors hover:border-slate-700 ${SEVERITY_LEFT[e.severity] ?? 'border-l-slate-700'}`}
-              >
-                <div className="mt-0.5 shrink-0">
-                  {EVENT_ICONS[e.eventType] ?? <ShieldAlert className="h-4 w-4 text-slate-400" />}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-medium text-slate-100 text-sm">{e.eventType}</span>
-                    <span className={`rounded border px-1.5 py-0.5 text-xs font-medium ${SEVERITY_COLORS[e.severity] ?? ''}`}>
-                      {e.severity}
-                    </span>
-                    <span className={`text-xs ${e.status === 'Open' ? 'text-red-400' : e.status === 'Resolved' ? 'text-green-400' : 'text-amber-400'}`}>
-                      {e.status}
-                    </span>
-                  </div>
-                  <p className="mt-0.5 truncate text-xs text-slate-400">{e.evidence?.summary}</p>
-                  <p className="mt-1 text-xs text-slate-600">
-                    {new Date(e.startedAt).toLocaleString()}
-                    {e.cameraId && ` · Camera #${e.cameraId}`}
-                  </p>
-                </div>
-              </Link>
-            ))}
-          </div>
-        )}
+      <div className="grid gap-4 lg:grid-cols-2 lg:items-stretch">
+        <SafetyEventFeed
+          observations={displayedObservations}
+          loading={eventsLoading}
+          filter={observationFilter}
+          onFilterChange={setObservationFilter}
+          eventIcons={EVENT_ICONS}
+          eventLabels={CAMPUS_SAFETY_TYPE_LABELS}
+          periodLabel={periodLabel}
+        />
+        <CampusSafetyScorePanel
+          overallScore={scores.data?.overallScore ?? null}
+          moduleCompare={scoreCompare.data?.moduleDeltas}
+          compareLabel={compareLabel}
+          filters={filters}
+          periodStart={periodStart}
+          periodEnd={summaryDate}
+          periodLabel={periodLabel}
+          events={periodEvents}
+          loading={scores.loading || scoreCompare.loading}
+        />
       </div>
 
-      {/* Score drivers */}
-      {(safetyScore.drivers.length > 0 || securityScore.drivers.length > 0) && (
-        <Card className="border-slate-800 bg-slate-900/60">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-slate-300">Score Drivers</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {[
-              { label: 'Safety', drivers: safetyScore.drivers },
-              { label: 'Security', drivers: securityScore.drivers },
-            ].map(({ label, drivers }) =>
-              drivers.length > 0 ? (
-                <div key={label}>
-                  <p className="mb-2 text-xs font-medium text-slate-500">{label}</p>
-                  <div className="space-y-1.5">
-                    {drivers.map((d) => (
-                      <div key={d.key} className="flex items-center justify-between text-xs">
-                        <span className="text-slate-300">{d.label}</span>
-                        <span className={d.impact >= 0 ? 'text-green-400' : 'text-red-400'}>
-                          {d.impact >= 0 ? '+' : ''}{d.impact}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ) : null
-            )}
-          </CardContent>
-        </Card>
-      )}
     </div>
   );
 }

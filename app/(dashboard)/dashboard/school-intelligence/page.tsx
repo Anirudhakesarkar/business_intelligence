@@ -8,6 +8,7 @@ import { usePageHeaderRefresh } from '@/components/layout/page-header-context';
 import { SchoolIntelligenceBreadcrumbs } from '@/components/school-intelligence/SchoolIntelligenceBreadcrumbs';
 import { SIFilterBar } from '@/components/school-intelligence/SIFilterBar';
 import { SIModuleScoreGrid } from '@/components/school-intelligence/SIModuleScoreGrid';
+import { resolveOrganizationId } from '@/lib/school-intelligence/resolve-org-id';
 import type { SIFilters } from '@/lib/school-intelligence/types';
 import { MODULE_LABELS } from '@/lib/school-score-engine/weights';
 import type { ScoreModuleKey } from '@/lib/school-score-engine/types';
@@ -27,14 +28,24 @@ const MODULE_KPIS: { key: string; mod: ScoreModuleKey }[] = [
 ];
 
 export default function SchoolIntelligenceOverviewPage() {
-  const orgId = 1;
   const [filters, setFilters] = useState<SIFilters>({ organizationId: '', siteId: '', dateRange: '7d' });
+  const orgId = resolveOrganizationId(filters);
   const { to: summaryDate, from } = resolveSIFilterDates(filters);
   const compareLabel = scoreCompareLabel(filters.dateRange, from, summaryDate);
   const scores = useSchoolOverallScore(orgId, summaryDate, filters.dateRange);
   const scoreCompare = useSchoolScoreCompare(orgId, filters);
   const daily = useSchoolDailyOverview(orgId, summaryDate);
-  const isSchoolOrg = filters.organizationId === '' || filters.organizationId === 'demo-school';
+  const isSchoolOrg = filters.organizationId === '' || orgId > 0;
+
+  const hasScoreData = scores.data?.overallScore != null;
+  const hasDailyData = (daily.data?.modules ?? []).some((m) => m.rowCount > 0);
+  const showDataGap =
+    !scores.loading &&
+    !daily.loading &&
+    !scores.error &&
+    !daily.error &&
+    !hasScoreData &&
+    !hasDailyData;
 
   const mvp3Only = isMvp3ScoresOnlyClient();
   const visibleMods = new Set(visibleScoreModuleKeysClient());
@@ -56,6 +67,20 @@ export default function SchoolIntelligenceOverviewPage() {
       {!isSchoolOrg && (
         <div className="rounded-lg border border-yellow-900/50 bg-yellow-950/30 px-4 py-3 text-sm text-yellow-200">
           School Intelligence is only available for school-type organizations.
+        </div>
+      )}
+
+      {showDataGap && (
+        <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+          No Postgres-backed scores or daily summaries for <strong>{summaryDate}</strong>.
+          Run the daily pipeline or import data for this date, then refresh.
+        </div>
+      )}
+
+      {(scores.error || daily.error) && (
+        <div className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
+          {scores.error && <p>Scores: {scores.error}</p>}
+          {daily.error && <p>Daily summaries: {daily.error}</p>}
         </div>
       )}
 

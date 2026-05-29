@@ -17,7 +17,8 @@ describe('summary to signal trace', () => {
     seedRuleEngine(1);
     const date = '2099-11-05';
     aggregateDay(1, date);
-    const events = getModuleMetricEvents('teacher', 1, date, 'supervision_gaps');
+    const result = getModuleMetricEvents('teacher', 1, date, 'supervision_gaps');
+    const events = result.events;
     if (events.length) {
       const withSignals = events.filter((e) => (e.evidence?.signalIds?.length ?? 0) > 0);
       assert.ok(withSignals.length >= 0);

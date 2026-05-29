@@ -1,12 +1,28 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { fetchJsonStrict } from '@/lib/school-intelligence/fetch-json';
 import type { ScoreModuleKey, ScoreDriver } from '@/lib/school-score-engine/types';
+
+type ModuleScoreDetail = {
+  score?: number | null;
+  top_drivers?: ScoreDriver[];
+  drivers?: ScoreDriver[];
+  priorScore?: number | null;
+  trend_delta?: number | null;
+  error?: string;
+};
+
+type ModuleTrend = {
+  points?: { date: string; score: number }[];
+  error?: string;
+};
 
 export function useSchoolModuleScore(
   moduleKey: ScoreModuleKey | undefined,
   organizationId = 1,
-  date: string
+  date: string,
+  siteId?: string,
 ) {
   const [score, setScore] = useState<number | null>(null);
   const [drivers, setDrivers] = useState<ScoreDriver[]>([]);
@@ -25,21 +41,15 @@ export function useSchoolModuleScore(
     setLoading(true);
     setError(null);
     try {
-      const [detailRes, trendRes] = await Promise.all([
-        fetch(
-          `/api/school-scores/modules/${moduleKey}?organizationId=${organizationId}&date=${encodeURIComponent(date)}`
-        ),
-        fetch(
-          `/api/school-scores/modules/${moduleKey}/trend?organizationId=${organizationId}&date=${encodeURIComponent(date)}&days=7`
-        ),
-      ]);
-      const detailJson = await detailRes.json();
-      if (!detailRes.ok) {
-        throw new Error(detailJson.error ?? 'Failed to load module score');
-      }
-      const trendJson = await trendRes.json();
-      if (!trendRes.ok) {
-        throw new Error(trendJson.error ?? 'Failed to load module trend');
+      const siteQ = siteId ? `&siteId=${encodeURIComponent(siteId)}` : '';
+      const detailJson = await fetchJsonStrict<ModuleScoreDetail>(
+        `/api/school-scores/modules/${moduleKey}?organizationId=${organizationId}&date=${encodeURIComponent(date)}${siteQ}`,
+      );
+      const trendJson = await fetchJsonStrict<ModuleTrend>(
+        `/api/school-scores/modules/${moduleKey}/trend?organizationId=${organizationId}&date=${encodeURIComponent(date)}&days=7${siteQ}`,
+      );
+      if (detailJson.error) {
+        throw new Error(detailJson.error);
       }
       setScore(detailJson.score ?? null);
       setDrivers(detailJson.top_drivers ?? detailJson.drivers ?? []);
@@ -56,7 +66,7 @@ export function useSchoolModuleScore(
     } finally {
       setLoading(false);
     }
-  }, [moduleKey, organizationId, date]);
+  }, [moduleKey, organizationId, date, siteId]);
 
   useEffect(() => {
     void load();

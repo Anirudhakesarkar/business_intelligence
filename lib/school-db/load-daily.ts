@@ -18,6 +18,16 @@ function parseJson<T>(v: unknown): T {
   return (v ?? {}) as T;
 }
 
+function formatPgDate(v: unknown): string {
+  if (v instanceof Date) {
+    const y = v.getFullYear();
+    const m = String(v.getMonth() + 1).padStart(2, '0');
+    const d = String(v.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+  return String(v).slice(0, 10);
+}
+
 function baseFromPg(r: {
   id: string | number;
   organization_id: string | number;
@@ -27,8 +37,7 @@ function baseFromPg(r: {
   facts: unknown;
   created_at?: string | Date;
 }) {
-  const summaryDate =
-    r.summary_date instanceof Date ? r.summary_date.toISOString().slice(0, 10) : String(r.summary_date).slice(0, 10);
+  const summaryDate = formatPgDate(r.summary_date);
   return {
     id: Number(r.id),
     organizationId: Number(r.organization_id),
@@ -91,7 +100,6 @@ export async function loadDailyAggregationFromPg(
     [organizationId, date],
   );
   const teacherRows = teacherR?.rows ?? [];
-  if (!teacherRows.length) return false;
 
   const teacher: TeacherDailyRow[] = teacherRows.map((r) => ({
     ...baseFromPg(r),
@@ -280,5 +288,16 @@ export async function loadDailyAggregationFromPg(
   mergeRows(dailyDb.compliance(), compliance, organizationId, date);
   mergeRows(dailyDb.scoreInputs(), scoreInputs, organizationId, date);
 
-  return true;
+  const loadedCount =
+    teacher.length +
+    classroom.length +
+    occupancy.length +
+    process.length +
+    staff.length +
+    space.length +
+    discipline.length +
+    parent.length +
+    compliance.length +
+    scoreInputs.length;
+  return loadedCount > 0;
 }

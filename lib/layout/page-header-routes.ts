@@ -1,18 +1,14 @@
 import type { ComponentType } from 'react';
 import {
   BookOpen,
-  CalendarDays,
   ClipboardCheck,
   DoorOpen,
   GraduationCap,
   Inbox,
   LayoutGrid,
-  ListChecks,
   ScanEye,
   Scale,
   ShieldAlert,
-  ShieldCheck,
-  SlidersHorizontal,
   TrendingUp,
   UserCheck,
   Users,
@@ -60,47 +56,19 @@ const SCHOOL_INTELLIGENCE_ROUTES: RouteEntry[] = [
   },
   {
     prefix: '/dashboard/school-intelligence/teacher-productivity',
-    config: { title: 'Teacher Productivity', tone: 'indigo', Icon: TrendingUp },
-  },
-  {
-    prefix: '/dashboard/school-intelligence/teacher-supervision',
-    config: { title: 'Teacher Supervision', tone: 'indigo', Icon: UserCheck },
-  },
-  {
-    prefix: '/dashboard/school-intelligence/student-occupancy',
-    config: { title: 'Student Occupancy', tone: 'sky', Icon: Users },
-  },
-  {
-    prefix: '/dashboard/school-intelligence/academic-operations',
-    config: { title: 'Academic Operations', tone: 'indigo', Icon: BookOpen },
-  },
-  {
-    prefix: '/dashboard/school-intelligence/staff-deployment',
-    config: { title: 'Staff Deployment', tone: 'violet', Icon: UsersRound },
+    config: { title: 'Teacher & Staff Management', tone: 'indigo', Icon: TrendingUp },
   },
   {
     prefix: '/dashboard/school-intelligence/space-utilization',
     config: { title: 'Space Utilization', tone: 'emerald', Icon: LayoutGrid },
   },
   {
-    prefix: '/dashboard/school-intelligence/gate-flow',
-    config: { title: 'Gate Flow', tone: 'amber', Icon: DoorOpen },
-  },
-  {
     prefix: '/dashboard/school-intelligence/parent-experience',
     config: { title: 'Parent Experience', tone: 'emerald', Icon: Users },
   },
   {
-    prefix: '/dashboard/school-intelligence/discipline',
-    config: { title: 'Discipline', tone: 'rose', Icon: Scale },
-  },
-  {
     prefix: '/dashboard/school-intelligence/compliance',
     config: { title: 'Compliance', tone: 'amber', Icon: ClipboardCheck },
-  },
-  {
-    prefix: '/dashboard/school-intelligence/zones-schedule',
-    config: { title: 'Zones & Schedule', tone: 'sky', Icon: LayoutGrid },
   },
   {
     prefix: '/dashboard/school-intelligence/events/',
@@ -111,22 +79,6 @@ const SCHOOL_INTELLIGENCE_ROUTES: RouteEntry[] = [
     prefix: '/dashboard/school-intelligence/events',
     exact: true,
     config: { title: 'Events Inbox', tone: 'sky', Icon: Inbox },
-  },
-  {
-    prefix: '/dashboard/school-intelligence/rules',
-    config: { title: 'Intelligence Rules', tone: 'sky', Icon: ShieldCheck },
-  },
-  {
-    prefix: '/dashboard/school-intelligence/actions',
-    config: { title: 'Action Tasks', tone: 'violet', Icon: ListChecks },
-  },
-  {
-    prefix: '/dashboard/school-intelligence/digest',
-    config: { title: 'Daily Digest', tone: 'sky', Icon: CalendarDays },
-  },
-  {
-    prefix: '/dashboard/school-intelligence/score-settings',
-    config: { title: 'Score Settings', tone: 'slate', Icon: SlidersHorizontal },
   },
   {
     prefix: '/dashboard/school-intelligence/incidents',

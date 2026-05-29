@@ -214,16 +214,7 @@ export function SchoolDailyModuleView({
       {primary.error && (
         <div className="flex items-start gap-3 rounded-xl border border-rose-500/20 bg-rose-500/5 px-4 py-3 text-sm text-rose-200">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-          <div>
-            <p>{primary.error}.</p>
-            <button
-              type="button"
-              className="mt-1 inline-flex items-center gap-1 rounded-md border border-rose-500/30 bg-rose-500/10 px-2 py-1 text-xs font-medium text-rose-100 hover:bg-rose-500/20"
-              onClick={() => void fetch('/api/school-daily-summaries/seed', { method: 'POST' }).then(() => primary.reload())}
-            >
-              Seed pipeline with demo data
-            </button>
-          </div>
+          <p>{primary.error}.</p>
         </div>
       )}
 
@@ -264,15 +255,6 @@ export function SchoolDailyModuleView({
                   ) : (
                     `Generate summary for ${date}`
                   )}
-                </button>
-                <button
-                  type="button"
-                  className="text-xs text-slate-500 hover:text-slate-300"
-                  onClick={() =>
-                    void fetch('/api/school-daily-summaries/seed', { method: 'POST' }).then(() => primary.reload())
-                  }
-                >
-                  Or seed demo pipeline
                 </button>
               </div>
             )}

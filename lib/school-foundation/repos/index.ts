@@ -11,8 +11,10 @@ export * from './camera-import';
 export * from './timetable-sample';
 export * from './orphan-spatial';
 export * from './acceptance-residue';
+export * from './section-room-mapping';
 
 import { hydrateBuildingsFromPg, hydrateFloorsFromPg, hydrateRoomsFromPg, hydrateZonesFromPg } from './foundation-spatial';
+import { hydrateSectionRoomMappingsFromPg } from './section-room-mapping';
 import { hydrateClassesFromPg, hydrateSectionsFromPg, hydrateStaffFromPg, hydrateSubjectsFromPg, hydrateTeachersFromPg } from './foundation-org';
 import { hydrateCamerasFromPg } from './foundation-cameras';
 import { hydrateCalendarFromPg, hydrateRostersFromPg, hydrateTimeWindowsFromPg, hydrateTimetableFromPg } from './foundation-schedule';
@@ -36,6 +38,7 @@ export async function hydrateFoundationFromPg() {
     hydrateTimeWindowsFromPg(),
     hydrateTimetableFromPg(),
     hydrateRostersFromPg(),
+    hydrateSectionRoomMappingsFromPg(),
   ]);
   return { hydrated: parts.reduce((s, p) => s + p.hydrated, 0), parts };
 }

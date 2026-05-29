@@ -12,7 +12,7 @@ describe('foundation audit coverage', () => {
     const section = db.sections().find((s) => s.classId === cls.id)!;
     const room = listRooms(1)[0];
     const teacher = db.teachers().find((t) => t.organizationId === 1)!;
-    const zone = db.zones().find((z) => z.organizationId === 1) ?? db.zones()[0];
+    const zone = db.zones()[0];
     const staff = db.staff().find((s) => s.organizationId === 1)!;
     createTimetableEntry({
       organizationId: 1,
@@ -29,7 +29,7 @@ describe('foundation audit coverage', () => {
       organizationId: 1,
       zoneId: zone.id,
       staffMemberId: staff.id,
-      dutyRole: 'Gate',
+      dutyType: 'Gate',
       dayOfWeek: 7,
       startTime: '06:00',
       endTime: '06:30',

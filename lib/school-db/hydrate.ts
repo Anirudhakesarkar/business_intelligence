@@ -9,7 +9,7 @@ import { dbQuery, isDbEnabled } from './pool';
 import { isStrictDbMode } from './strict-mode';
 import { loadDailyScore, loadGptSummary } from './persist-scores-gpt';
 
-let hydrateInflight: Promise<void> | null = null;
+let hydrateInflight = new Map<string, Promise<void>>();
 let foundationHydrateInflight: Promise<void> | null = null;
 
 /**
@@ -20,21 +20,28 @@ let foundationHydrateInflight: Promise<void> | null = null;
 export function ensureFoundationHydrated() {
   if (!isDbEnabled()) return Promise.resolve();
   if (!foundationHydrateInflight) {
-    foundationHydrateInflight = hydrateFoundationFromPg().catch((err) => {
-      if (isStrictDbMode()) throw err;
-    });
+    foundationHydrateInflight = hydrateFoundationFromPg()
+      .catch((err) => {
+        if (isStrictDbMode()) throw err;
+      })
+      .then(() => undefined);
   }
   return foundationHydrateInflight;
 }
 
-/** Load latest scores + GPT from Postgres into in-memory stores (one flight per process). */
+/** Load latest scores + GPT from Postgres into in-memory stores (one flight per org/date). */
 export function ensureSchoolDbHydrated(organizationId = 1, date?: string) {
   if (!isDbEnabled()) return Promise.resolve();
   const scoreDate = date ?? new Date().toISOString().slice(0, 10);
-  if (!hydrateInflight) {
-    hydrateInflight = hydrateForDate(organizationId, scoreDate).catch(() => undefined).then(() => undefined);
+  const key = `${organizationId}:${scoreDate}`;
+  let inflight = hydrateInflight.get(key);
+  if (!inflight) {
+    inflight = hydrateForDate(organizationId, scoreDate)
+      .catch(() => false)
+      .then(() => undefined);
+    hydrateInflight.set(key, inflight);
   }
-  return hydrateInflight;
+  return inflight;
 }
 
 export async function hydrateForDate(organizationId: number, date: string, siteId?: number) {

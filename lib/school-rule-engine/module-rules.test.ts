@@ -55,6 +55,6 @@ describe('school-rule-engine modules', () => {
       'GateCongestion', 'StaffMissingAtGate', 'RunningDetected', 'RestrictedZoneEntry',
       'FallDetected', 'FireSmokeDetected',
     ];
-    for (const t of required) assert.ok(types.has(t), `missing template for ${t}`);
+    for (const t of required) assert.ok(types.has(t as import('./types').EventType), `missing template for ${t}`);
   });
 });

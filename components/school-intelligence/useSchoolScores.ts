@@ -15,6 +15,7 @@ import {
   type ModuleScoreCompare,
 } from '@/lib/school-intelligence/module-score-demo';
 import type { SIFilters } from '@/lib/school-intelligence/types';
+import { fetchJsonStrict } from '@/lib/school-intelligence/fetch-json';
 import { visibleScoreModuleKeysClient } from '@/components/school-intelligence/scoreVisibility';
 
 export type { ModuleScoreCompare };
@@ -46,12 +47,11 @@ export function useSchoolOverallScore(
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(
-        `/api/school-scores/overall?organizationId=${organizationId}&date=${encodeURIComponent(date)}`
+      const json = await fetchJsonStrict<DailyOverallScore & { error?: string }>(
+        `/api/school-scores/overall?organizationId=${organizationId}&date=${encodeURIComponent(date)}`,
       );
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? 'Failed to load scores');
-      const live = json.overallScore != null ? (json as DailyOverallScore) : null;
+      if (json.error) throw new Error(json.error);
+      const live = json.overallScore != null ? json : null;
       if (isSchoolScoreDemoEnabled()) {
         setData(mergeWithDemoOverall(live, date, dateRange, visibleModules));
       } else {
@@ -100,9 +100,10 @@ export function useSchoolScoreCompare(organizationId = 1, filters: SIFilters) {
         priorDate,
       });
       if (filters.siteId) q.set('siteId', filters.siteId);
-      const res = await fetch(`/api/school-scores/overall/compare?${q}`);
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? 'Failed to load score comparison');
+      const json = await fetchJsonStrict<SchoolScoreCompare & { error?: string }>(
+        `/api/school-scores/overall/compare?${q}`,
+      );
+      if (json.error) throw new Error(json.error);
       const liveDeltas = (json.moduleDeltas ?? []) as ModuleScoreCompare[];
       const moduleDeltas = isSchoolScoreDemoEnabled()
         ? mergeWithDemoCompare(liveDeltas, filters.dateRange, visibleModules)

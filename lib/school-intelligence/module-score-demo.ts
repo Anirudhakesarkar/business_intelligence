@@ -62,7 +62,7 @@ function demoModuleRow(
 }
 
 export function isSchoolScoreDemoEnabled(): boolean {
-  return process.env.NEXT_PUBLIC_SCHOOL_SCORE_DEMO !== '0';
+  return process.env.NEXT_PUBLIC_SCHOOL_SCORE_DEMO === '1';
 }
 
 export function buildDemoOverallScore(
@@ -117,6 +117,10 @@ export function mergeWithDemoOverall(
   dateRange: SIDateRange,
   visibleModules: ScoreModuleKey[]
 ): DailyOverallScore {
+  if (!isSchoolScoreDemoEnabled()) {
+    if (live) return live;
+    throw new Error('Score unavailable from Postgres');
+  }
   const demo = buildDemoOverallScore(date, dateRange, visibleModules);
   if (!live?.moduleScores?.length) return demo;
 
@@ -139,6 +143,7 @@ export function mergeWithDemoCompare(
   dateRange: SIDateRange,
   visibleModules: ScoreModuleKey[]
 ): ModuleScoreCompare[] {
+  if (!isSchoolScoreDemoEnabled()) return live;
   const demo = buildDemoModuleCompare(dateRange, visibleModules);
   const byKey = new Map(live.map((m) => [m.moduleKey, m]));
 

@@ -33,7 +33,7 @@ describe('school-daily-summaries aggregation', () => {
     db.calendar().push({ id: 88888, organizationId: 1, calendarDate: date, dayType: 'Holiday', label: 'Winter break' });
     const r = aggregateDay(1, date);
     assert.equal(r.skipped, true);
-    assert.equal(r.reason, 'holiday');
+    assert.equal((r as { skipped: true; reason: string }).reason, 'holiday');
   });
 
   it('scheduled aggregation returns logging metadata', () => {

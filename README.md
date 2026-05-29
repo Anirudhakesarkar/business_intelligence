@@ -83,8 +83,6 @@ Route group: `app/(dashboard)/dashboard/school-management/*`
 Route group: `app/(dashboard)/dashboard/school-intelligence/*`
 
 - **Overview**: `/dashboard/school-intelligence`
-- **Gate Flow**: `/dashboard/school-intelligence/gate-flow`
-- **Academic Operations**: `/dashboard/school-intelligence/academic-operations`
 - **Zones & Schedule**: `/dashboard/school-intelligence/zones-schedule`
 - **Events Inbox**: `/dashboard/school-intelligence/events` and `/dashboard/school-intelligence/events/[id]`
 - **Rules**: `/dashboard/school-intelligence/rules`
@@ -531,16 +529,10 @@ These components are reused across School Intelligence pages:
 
 Most module pages are thin wrappers around `SchoolDailyModuleView`:
 
-- `app/(dashboard)/dashboard/school-intelligence/gate-flow/page.tsx`
-- `.../academic-operations/page.tsx`
 - `.../compliance/page.tsx`
-- `.../discipline/page.tsx`
 - `.../parent-experience/page.tsx`
-- `.../staff-deployment/page.tsx`
 - `.../space-utilization/page.tsx`
-- `.../student-occupancy/page.tsx`
 - `.../teacher-productivity/page.tsx`
-- `.../teacher-supervision/page.tsx`
 
 These pages typically use:
 
@@ -1111,44 +1103,6 @@ This section lists **the exact UI text** (labels users see) per page in School M
 
 This section lists **the exact UI text** (labels users see) per page, so Codex can reason about UX coverage and gaps.
 
-### `/dashboard/school-intelligence/gate-flow` (Gate Arrival & Dispersal)
-
-- **Page title**: **Gate Arrival & Dispersal**
-- **Cards**
-  - Dispersal congestion (process_daily)
-  - Arrival congestion (process_daily)
-  - GateCongestion events (rule engine)
-  - Gate & Campus Windows
-  - Gate & Congestion Alerts
-- **Badges/labels**
-  - Window type labels: Arrival, Dispersal, Break, Lunch, Assembly, Maintenance
-  - Status badge: **Live**
-  - Empty state: “No time windows defined.”
-  - Hint: “Add arrival/dispersal windows in School Management → Settings.”
-  - Green banner: “No congestion alerts for this date.”
-
-### `/dashboard/school-intelligence/academic-operations` (Academic Operations)
-
-- **Page title**: **Academic Operations**
-- **Summary cards**
-  - Live
-  - Upcoming
-  - Late (day) (hint text: “classroom_daily”)
-  - Missed (day) (hint text: “classroom_daily”)
-- **Period schedule card**
-  - Card title: “Period Schedule — Mon/Tue/…”
-  - Table headers: Time, Section, Subject, Teacher, Room, Status
-  - Status pills: Conducted, Missed, Live, Upcoming, Late start
-  - Teacher empty label: **Unassigned**
-  - Empty state: “No periods scheduled for Mon/Tue/…”
-- **Anomalies card**
-  - Card title: **Academic Anomalies**
-  - Green banner: “No late or missed signals in classroom_daily; no rule-engine academic events.”
-- **Daily module KPI labels (fixed by page)**
-  - Conducted %
-  - Late periods
-  - Missed
-
 ### `/dashboard/school-intelligence/zones-schedule` (Zones & Schedule)
 
 - **Page title**: **Zones & Schedule**
@@ -1179,26 +1133,6 @@ This section lists **the exact UI text** (labels users see) per page, so Codex c
   - Section label: “Risk Zones (N)”
   - Badge: “⚠ Risk”
   - Empty state: “No zones configured.”
-
-### `/dashboard/school-intelligence/discipline` (Discipline Intelligence)
-
-- **Page title**: **Discipline Intelligence**
-- **Summary cards**
-  - Total incidents
-  - Critical
-  - Resolved
-- **Event list card title**
-  - Behaviour Events
-- **Severity filter labels**
-  - all, critical, high, medium, low
-- **Type chip labels (examples)**
-  - Running, Loitering, Restricted Zone, Unsafe Climbing, General Discipline, Exit Crowding
-- **Empty states**
-  - “No discipline incidents for this date.”
-  - “No events match the current filter.”
-- **Daily module KPI labels (fixed by page)**
-  - Running
-  - Loitering
 
 ### `/dashboard/school-intelligence/compliance` (Compliance Intelligence)
 
@@ -1268,26 +1202,6 @@ This section lists **the exact UI text** (labels users see) per page, so Codex c
 - **Daily module KPI labels (fixed by page)**
   - Dispersal congestion (min)
 
-### `/dashboard/school-intelligence/staff-deployment` (Staff Deployment)
-
-- **Page title**: **Staff Deployment**
-- **Summary cards**
-  - Active shifts
-  - Critical windows
-  - Missing alerts
-- **Roster card**
-  - Duty Roster — Sun/Mon/…
-  - Table headers: Staff member, Role, Duty type, Zone, Time, Status, Critical
-  - Status pills: Active / Done / Upcoming
-  - Critical pill: Critical
-  - Empty state: “No duty shifts for Mon/Tue/…”
-- **Role filter chips**: role names + `all`
-- **Alerts card**
-  - Deployment Alerts
-  - Green banner: “All posts covered — no missing-staff alerts for this date.”
-- **Daily module KPI labels (fixed by page)**
-  - Coverage %
-
 ### `/dashboard/school-intelligence/space-utilization` (Space Utilization)
 
 - **Page title**: **Space Utilization**
@@ -1303,26 +1217,6 @@ This section lists **the exact UI text** (labels users see) per page, so Codex c
 - **Green banner**: “No space-utilization anomalies for this date.”
 - **Daily module KPI labels (fixed by page)**
   - Utilization %
-
-### `/dashboard/school-intelligence/student-occupancy` (Student Occupancy Intelligence)
-
-- **Page title**: **Student Occupancy Intelligence**
-- **Summary cards**
-  - Occupied rooms
-  - Over capacity
-  - Under-used
-- **Room Occupancy Grid card**
-  - Room Occupancy Grid
-  - Status badges: Overcrowded / On track / Under-used / Empty
-  - “No class scheduled”
-  - Empty state: “No rooms found. Seed demo data from Master Data.”
-- **Events card**
-  - Occupancy Events
-- **Green banner**: “No occupancy anomalies for this date.”
-- **Daily module KPI labels (fixed by page)**
-  - Expected match %
-  - Overcrowding
-  - Under-use
 
 ### `/dashboard/school-intelligence/teacher-productivity` (Teacher Productivity Intelligence)
 
@@ -1340,22 +1234,6 @@ This section lists **the exact UI text** (labels users see) per page, so Codex c
   - Teacher presence %
   - On-time start %
   - Supervision gaps
-
-### `/dashboard/school-intelligence/teacher-supervision` (Teacher Presence & Supervision)
-
-- **Page title**: **Teacher Presence & Supervision**
-- **Teacher Assignment Summary card**
-  - Teacher Assignment Summary
-  - Table headers: Teacher, Periods, Sections, Gaps, Status
-  - Status text: “✓ Clear” / “⚠ Gaps”
-  - Warning line: “N periods with no teacher assigned today.”
-- **Gap Events card**
-  - Gap Events
-  - Empty state: “No supervision gaps for this date.”
-- **Daily module KPI labels (fixed by page)**
-  - Supervision gaps
-  - Presence %
-  - Classes conducted %
 
 ### `/dashboard/school-intelligence/digest` (Daily Principal Digest)
 
@@ -1558,8 +1436,10 @@ This section lists **the exact UI text** (labels users see) per page, so Codex c
 
 ### Redirect-only pages
 
-- **`/dashboard/school-intelligence/occupancy`** redirects to **`/dashboard/school-intelligence/student-occupancy`**.
-- **`/dashboard/school-intelligence/incidents`** redirects to **`/dashboard/school-intelligence/discipline`**.
+- **`/dashboard/school-intelligence/occupancy`** and **`/dashboard/school-intelligence/student-occupancy`** redirect to **`/dashboard/school-intelligence/space-utilization`**.
+- **`/dashboard/school-intelligence/academic-operations`** redirects to **`/dashboard/school-intelligence/teacher-productivity`** (Teacher & Staff Management).
+- **`/dashboard/school-intelligence/staff-deployment`** and **`/dashboard/school-intelligence/gate-flow`** redirect to **`/dashboard/school-intelligence/parent-experience`**.
+- **`/dashboard/school-intelligence/discipline`** and **`/dashboard/school-intelligence/incidents`** redirect to **`/dashboard/school-intelligence/campus-safety`**.
 
 ## Aggregator Simulator (Edge BI) — every 5 minutes
 

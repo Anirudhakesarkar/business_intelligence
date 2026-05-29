@@ -1,7 +1,7 @@
 import '@/lib/school-persistence/init';
 import { NextRequest } from 'next/server';
 import { json, err } from '@/lib/school-daily-summaries/json';
-import { getModuleWeekCompare } from '@/lib/school-daily-summaries/store';
+import { ensureDailySummariesForDate, getModuleWeekCompare } from '@/lib/school-daily-summaries/store';
 import type { DailySummaryModule } from '@/lib/school-daily-summaries/types';
 
 const MODULES = new Set(['teacher', 'classroom', 'occupancy', 'process', 'staff', 'space', 'discipline', 'parent', 'compliance', 'school']);
@@ -14,5 +14,6 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ module: str
   const siteIdRaw = req.nextUrl.searchParams.get('siteId');
   const siteId = siteIdRaw ? Number(siteIdRaw) : undefined;
   const metric = req.nextUrl.searchParams.get('metric') ?? undefined;
+  await ensureDailySummariesForDate(organizationId, date, siteId);
   return json(getModuleWeekCompare(module as DailySummaryModule, organizationId, date, siteId, metric));
 }

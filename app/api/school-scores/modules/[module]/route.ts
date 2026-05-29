@@ -9,6 +9,8 @@ const KEYS = new Set([
   'safety', 'security', 'teacher', 'occupancy', 'academic', 'staff', 'space', 'discipline', 'parent', 'compliance',
 ]);
 
+import { ensureSchoolDbHydrated } from '@/lib/school-db/hydrate';
+
 export async function GET(req: NextRequest, ctx: { params: Promise<{ module: string }> }) {
   const { module } = await ctx.params;
   if (!KEYS.has(module)) return err('Unknown module');
@@ -16,6 +18,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ module: str
   const organizationId = Number(req.nextUrl.searchParams.get('organizationId') ?? 1);
   const siteIdRaw = req.nextUrl.searchParams.get('siteId');
   const siteId = siteIdRaw ? Number(siteIdRaw) : undefined;
+  await ensureSchoolDbHydrated(organizationId, date);
   const detail = getModuleScoreDetail(organizationId, date, module as ScoreModuleKey, siteId);
   return json({
     module,

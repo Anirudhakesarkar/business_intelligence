@@ -1,8 +1,7 @@
 'use client';
 
-import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
-import { Loader2, ListChecks, CheckCircle2, ArrowRight, AlertTriangle } from 'lucide-react';
+import { Loader2, ListChecks, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { SISection } from '@/components/school-intelligence/SISection';
 import { Button } from '@/components/ui/button';
 
@@ -60,7 +59,7 @@ export function SchoolRecommendationsStrip({ organizationId = 1, date }: { organ
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       setCreatedIds((prev) => new Set(prev).add(recommendationId));
-      setToast({ kind: 'ok', msg: 'Action created — see Action Tasks.' });
+      setToast({ kind: 'ok', msg: 'Action created.' });
     } catch (e) {
       setToast({ kind: 'err', msg: e instanceof Error ? e.message : 'Could not create action.' });
     } finally {
@@ -73,14 +72,6 @@ export function SchoolRecommendationsStrip({ organizationId = 1, date }: { organ
       icon={<ListChecks className="h-4 w-4" />}
       eyebrow="Copilot · recommendations"
       title="Recommendations"
-      actions={
-        <Link
-          href="/dashboard/school-intelligence/actions"
-          className="inline-flex items-center gap-1 text-xs font-medium text-sky-400 hover:text-sky-300"
-        >
-          All actions <ArrowRight className="h-3 w-3" />
-        </Link>
-      }
     >
       {toast && (
         <div

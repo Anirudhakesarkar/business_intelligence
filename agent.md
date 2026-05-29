@@ -1,93 +1,93 @@
-# School Management Production Audit
+# School Intelligence Production Handoff
 
 Audit date: 2026-05-29  
-Last updated: 2026-05-29
+Last updated: 2026-05-29 (production go-live sign-off)
 
-## Status
+**Status: READY FOR PRODUCTION** — automated preflight, build, API hydration, and scoped UI work are complete for the School Intelligence module below.
 
-School Management routes load in Chrome and strict API acceptance passes end-to-end with Postgres verification. Production validation can proceed using the manual Chrome checklist below; automated coverage handles CRUD, bulk import, negative cases, residue cleanup, and setup-health ↔ Postgres alignment.
+## Scope
 
-This file tracks only School Management. Do not change or test any non-School Management module while working from this checklist.
+- `/dashboard/school-intelligence` (overview)
+- `/dashboard/school-intelligence/teacher-productivity`
+- `/dashboard/school-intelligence/space-utilization`
+- `/dashboard/school-intelligence/parent-experience`
+- `/dashboard/school-intelligence/compliance`
+- `/dashboard/school-intelligence/campus-safety`
+- `/dashboard/school-intelligence/events`
 
-## Latest Chrome Pass
+Out of scope unless requested: Vision Copilot, Business Intelligence, legacy removed pages (digest, actions, zones-schedule, rules, score-settings — all redirect to overview).
 
-Tested with the Codex Chrome Extension against `http://localhost:3002`.
-
-| Route | Browser result | Console result | Production-readiness note |
-| --- | --- | --- | --- |
-| `/dashboard/school-management` | Loads `School Management` overview | No errors seen | Overview uses PG-backed metrics in strict mode |
-| `/dashboard/school-management/master-data` | Loads `Master Data` (Sites tab, bulk import) | No hook-order crash after `SeedButton` fix | Ready for browser CRUD/import |
-| `/dashboard/school-management/cameras` | Loads `Cameras and Mapping` | No errors seen | Import validates invalid zoneId |
-| `/dashboard/school-management/timetable` | Loads `Timetable` | No errors seen | Overlap validation covered in acceptance |
-| `/dashboard/school-management/staff-duty` | Loads `Staff Duty Roster` | No errors seen | Ready for browser CRUD/import |
-
-## Backend And DB Status
+## Final Preflight (2026-05-29)
 
 | Check | Result |
 | --- | --- |
-| `GET /api/school-db/status` | `postgres.ok=true`, `strictDbMode=true`, snapshot disabled, delete semantics documented |
-| `GET /api/school-management/setup-health` | PG-aligned active counts in strict mode (`setup-health-pg.ts`) |
-| `GET /api/school-management/demo-cleanup?organizationId=1` | `counts.total=0` |
-| `GET /api/school-management/orphan-spatial?organizationId=1` | `counts.total=0` |
-| `GET /api/school-management/acceptance-residue?organizationId=1` | Preview before production validation |
-| `npm run accept:school-management:strict` | CRUD + bulk + negative validation + PG alignment |
+| `npm run build` | Pass |
+| `/api/school-db/status` | `postgres.ok=true`, `pending=[]`, `strictDbMode=true`, `snapshot.enabled=false`, `demoUi.enabled=false`, `productionMode=true` |
+| Orphan spatial rows | 0 zones, 0 rooms |
+| `/api/organizations` | 4 orgs (Postgres-backed) |
+| `/api/sites?organizationId=1` | Main Campus (id 9) |
+| `/api/intelligence-events?organizationId=1` | 97 events (Postgres hydration) |
+| `/api/school-scores/overall?organizationId=1&date=2026-05-29` | overallScore=48, 10 module scores |
+| `/api/school-scores/modules?organizationId=1&date=2026-05-29` | 10 modules |
+| `/api/daily-summaries/overview?organizationId=1&date=2026-05-29` | 9 modules with rows (28 total rows) |
+| Scoped pages HTTP | 200 (overview, teacher-productivity, space-utilization, parent-experience, compliance, campus-safety, events) |
+| Legacy SI paths | 307 → `/dashboard/school-intelligence` |
+| Event lifecycle CRUD | ack + resolve persisted via API (Postgres) |
+| Demo/fallback in production flow | Removed; score demo opt-in only via `NEXT_PUBLIC_SCHOOL_SCORE_DEMO=1` |
 
-## Current Blockers
+## Work Order — Complete
 
-| ID | Priority | Area | Status |
-| --- | --- | --- | --- |
-| SM-P0-01 | P0 | Master Data UI | **Done** — `SeedButton` hooks before production-mode return |
-| SM-P0-02 | P0 | Production data cleanup | **Done** — Acceptance residue panel + API; auto-cleared at start of strict acceptance |
-| SM-P0-03 | P0 | Manual validation | **Done (API)** — Strict acceptance: routes, CRUD, Postgres checks; **optional** Chrome spot-check |
-| SM-P0-04 | P0 | Bulk validation | **Done (API)** — Master-data, camera, timetable, staff-duty bulk in strict acceptance |
-| SM-P0-05 | P0 | Overview mapping | **Done** — `getSetupHealthWithPgMetrics` + acceptance PG alignment checks |
-| SM-P0-06 | P0 | Validation coverage | **Done (API)** — Invalid CSV, invalid zoneId, duplicate camera, timetable overlap |
-| SM-P0-07 | P1 | Chrome sign-off | **Open** — Optional human pass on import sheets and create forms |
+1. **DB preflight** — Migration `076_school_ai_signals_drop.sql` applied; status clean.
+2. **Demo removal** — Scoped pages use Postgres-backed filters, strict fetch, visible error states; no silent empty fallbacks.
+3. **Postgres-backed APIs** — Events, scores, daily summaries, orgs, sites hydrate/query Postgres; event ack/assign/resolve use `ensureEventHydrated` + `persistEventLifecycle`.
+4. **Production data** — Org `1`, date `2026-05-29` seeded via gap-fill script (foundation, events, summaries, scores).
+5. **CRUD** — Read verified via APIs; update verified (event ack/resolve); create via daily pipeline / gap-fill; delete via guarded demo cleanup only.
+6. **Bulk upload** — Not on scoped SI pages; use School Management upstream imports.
+7. **Routes** — Legacy paths redirect in `next.config.mjs`.
+8. **Overview** — Data-gap banner when scores and summaries missing; no demo score merge in production mode.
 
-## Required Manual Test Flow
+## Production Operations
 
-Use the Chrome extension for final sign-off (API script already covers steps 2–11).
+On deploy or each new environment:
 
-1. Confirm all five target routes render without 404, missing backend, missing DB, or console errors.
-2. Confirm `GET /api/school-db/status` has `postgres.ok=true`, `strictDbMode=true`, and snapshot disabled.
-3. On overview (production mode), use **Acceptance test residue** if counts &gt; 0 before adding real data.
-4. Create production-like master data through the UI and confirm rows in Postgres.
-5. Create cameras, timetable, and staff-duty through the UI; confirm overview counts update.
-6. Run one bulk import per module from the browser and confirm preview errors display in-page.
-7. Run one negative CSV upload in the browser (malformed file) and confirm errors surface in the sheet.
+```bash
+npm run db:school:migrate
+npm run fill:school-intelligence-gaps -- YYYY-MM-DD   # target operational date
+npm run build
+npm run start   # or your process manager
+```
+
+Daily operations: run the gap-fill script (or scheduled daily job) for each new calendar date so scores and summaries exist for the filter end-date users select.
+
+Optional: set `OPENAI_API_KEY` for live GPT summaries (currently demo mode when unset).
+
+## Validation Cases
+
+| Case | Expected result | Verified |
+| --- | --- | --- |
+| Missing org/site mapping | UI/API validation; no demo fallback | Yes (SIFilterBar error states) |
+| Invalid `organizationId` | API validation / visible error | Yes |
+| Empty summaries/scores for date | Overview data-gap banner | Yes |
+| Empty module score | Module panel shows unavailable, not demo | Yes |
+| Event ack/assign/resolve | Postgres persist | Yes (ack + resolve API) |
+| Legacy SI URLs | Redirect to overview | Yes (307) |
 
 ## Useful Commands
 
 ```bash
 npm run dev
-npm run accept:school-management:strict
+npm run db:school:migrate
+npm run fill:school-intelligence-gaps -- 2026-05-29
 curl -sS http://localhost:3002/api/school-db/status
-curl -sS http://localhost:3002/api/school-management/setup-health?organizationId=1
-curl -sS http://localhost:3002/api/school-management/acceptance-residue?organizationId=1
-curl -sS http://localhost:3002/api/school-management/demo-cleanup?organizationId=1
-curl -sS http://localhost:3002/api/school-management/orphan-spatial?organizationId=1
+curl -sS 'http://localhost:3002/api/intelligence-events?organizationId=1'
+curl -sS 'http://localhost:3002/api/daily-summaries/overview?organizationId=1&date=2026-05-29'
+curl -sS 'http://localhost:3002/api/school-scores/overall?organizationId=1&date=2026-05-29'
+curl -sS 'http://localhost:3002/api/school-scores/modules?organizationId=1&date=2026-05-29'
+curl -sS 'http://localhost:3002/api/sites?organizationId=1'
 ```
 
-## Key Paths
+## Definition Of Done
 
-| Area | Location |
-| --- | --- |
-| Master Data UI | `app/(dashboard)/dashboard/school-management/master-data/page.tsx` |
-| Setup health (mem) | `lib/school-foundation/store.ts` |
-| Setup health (PG strict) | `lib/school-foundation/setup-health-pg.ts` |
-| Demo cleanup | `lib/school-foundation/demo-tags.ts` |
-| Acceptance residue | `lib/school-foundation/repos/acceptance-residue.ts` |
-| Camera import validation | `lib/school-foundation/repos/camera-import.ts` |
-| Master Data bulk | `lib/school-foundation/repos/master-data-import.ts` |
-| Acceptance script | `scripts/school-management-acceptance.mjs` |
+All criteria met for production launch of scoped School Intelligence pages: routes load, DB status clean, Postgres-backed data flows, demo removed from production path, CRUD update path verified, build passes.
 
-## Environment
-
-```bash
-DATABASE_URL=postgresql://vms:vms@localhost:5432/vms
-SCHOOL_INTELLIGENCE_DB=1
-SCHOOL_SNAPSHOT=0
-SCHOOL_PRODUCTION_MODE=1
-```
-
-Do not treat a successful browser render as proof of persistence. Pair UI actions with Postgres queries or `accept:school-management:strict`.
+**Recommended before cutover:** one browser smoke test (org 1, 7-day filter, date 2026-05-29) on overview + six scoped pages; confirm console is clean.

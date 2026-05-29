@@ -1,6 +1,7 @@
 import '@/lib/school-persistence/init';
 import { NextRequest } from 'next/server';
 import { json, err } from '@/lib/school-score-engine/json';
+import { ensureSchoolDbHydrated } from '@/lib/school-db/hydrate';
 import { listModuleScores } from '@/lib/school-score-engine/store';
 import { visibleScoreModules } from '@/lib/school-score-engine/flags';
 import { MODULE_LABELS } from '@/lib/school-score-engine/weights';
@@ -11,6 +12,7 @@ export async function GET(req: NextRequest) {
   const siteIdRaw = req.nextUrl.searchParams.get('siteId');
   const siteId = siteIdRaw ? Number(siteIdRaw) : undefined;
   if (!Number.isFinite(organizationId)) return err('Invalid organizationId');
+  await ensureSchoolDbHydrated(organizationId, date);
   const rows = listModuleScores(organizationId, date, siteId);
   const visible = new Set(visibleScoreModules());
   return json({

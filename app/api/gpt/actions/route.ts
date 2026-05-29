@@ -1,7 +1,12 @@
 import '@/lib/school-persistence/init';
 import { NextRequest } from 'next/server';
 import { json, err } from '@/lib/school-gpt-copilot/json';
-import { createAction, createActionFromRecommendation, listActions } from '@/lib/school-gpt-copilot/store';
+import {
+  createAction,
+  createActionFromRecommendation,
+  listActions,
+  seedDemoActionsIfEmpty,
+} from '@/lib/school-gpt-copilot/store';
 import { dbQuery, isDbEnabled } from '@/lib/school-db/pool';
 
 async function listActionsFromPg(organizationId: number) {
@@ -40,9 +45,16 @@ async function listActionsFromPg(organizationId: number) {
 export async function GET(req: NextRequest) {
   const organizationId = Number(req.nextUrl.searchParams.get('organizationId') ?? 1);
   if (isDbEnabled()) {
-    const actions = await listActionsFromPg(organizationId);
-    return json({ organizationId, actions, source: 'postgres' as const });
+    try {
+      const actions = await listActionsFromPg(organizationId);
+      if (actions.length > 0) {
+        return json({ organizationId, actions, source: 'postgres' as const });
+      }
+    } catch (e) {
+      console.warn('[api/gpt/actions] postgres unavailable, using memory store:', (e as Error).message);
+    }
   }
+  seedDemoActionsIfEmpty(organizationId);
   return json({ organizationId, actions: listActions(organizationId), source: 'memory' as const });
 }
 

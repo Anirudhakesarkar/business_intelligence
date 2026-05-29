@@ -110,7 +110,7 @@ export function computeDisciplineScore(inputs: ScoreInputsBundle) {
   const d = (inputs.discipline ?? {}) as Record<string, unknown>;
   const running = num(d.running_count);
   const loiter = num(d.loitering_count);
-  const unsafe = num(d.unsafe_count);
+  const unsafe = num(d.unsafe_count) || num(d.unsafe_movement_count);
   const crowd = num(d.crowding_count);
   const score = clamp(100 - running * 8 - loiter * 5 - unsafe * 12 - crowd * 6);
   const drivers: ScoreDriver[] = [

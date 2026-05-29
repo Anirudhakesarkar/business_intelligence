@@ -102,6 +102,7 @@ describe('school-foundation setup health', () => {
       dayOfWeek: 1,
       startTime: '08:00',
       endTime: '09:00',
+      isCriticalWindow: false,
     });
     assert.ok(db.auditLog().length > before);
     assert.ok(db.auditLog().some((e) => e.entityType === 'school_calendar'));

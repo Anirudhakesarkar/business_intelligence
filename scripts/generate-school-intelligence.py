@@ -44,10 +44,8 @@ def patch_sidebar() -> None:
     items: [
       { href: '/dashboard/school-intelligence', label: 'Overview' },
       { href: '/dashboard/school-intelligence/campus-safety', label: 'Campus Safety' },
-      { href: '/dashboard/school-intelligence/zones-schedule', label: 'Zones & Schedule' },
       { href: '/dashboard/school-intelligence/occupancy', label: 'Occupancy' },
       { href: '/dashboard/school-intelligence/incidents', label: 'Incidents' },
-      { href: '/dashboard/school-intelligence/digest', label: 'Daily Digest' },
     ],
   },
 """
@@ -70,7 +68,6 @@ def lib_files() -> None:
     emit("lib/school-intelligence/zones-demo.ts", ZONES_DEMO_TS)
     emit("lib/school-intelligence/occupancy.ts", OCCUPANCY_TS)
     emit("lib/school-intelligence/incidents.ts", INCIDENTS_TS)
-    emit("lib/school-intelligence/digest.ts", DIGEST_TS)
     emit("lib/school-intelligence/store.ts", STORE_TS)
 
 

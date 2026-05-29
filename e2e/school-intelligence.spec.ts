@@ -3,18 +3,11 @@ import { injectDemoAuth } from './helpers/auth';
 
 const INTELLIGENCE_ROUTES = [
   { path: '/dashboard/school-intelligence', heading: 'School Intelligence' },
-  { path: '/dashboard/school-intelligence/actions', heading: 'GPT Action Tasks' },
-  { path: '/dashboard/school-intelligence/teacher-productivity', heading: 'Teacher Productivity Intelligence' },
-  { path: '/dashboard/school-intelligence/student-occupancy', heading: 'Student Occupancy Intelligence' },
-  { path: '/dashboard/school-intelligence/academic-operations', heading: 'Academic Operations' },
-  { path: '/dashboard/school-intelligence/staff-deployment', heading: 'Staff Deployment' },
+  { path: '/dashboard/school-intelligence/teacher-productivity', heading: 'Teacher & Staff Management' },
   { path: '/dashboard/school-intelligence/space-utilization', heading: 'Space Utilization' },
-  { path: '/dashboard/school-intelligence/discipline', heading: 'Discipline Intelligence' },
   { path: '/dashboard/school-intelligence/parent-experience', heading: 'Parent Experience' },
   { path: '/dashboard/school-intelligence/compliance', heading: 'Compliance Intelligence' },
   { path: '/dashboard/school-intelligence/events', heading: 'Intelligence events' },
-  { path: '/dashboard/school-intelligence/rules', heading: 'Intelligence rules' },
-  { path: '/dashboard/school-intelligence/score-settings', heading: 'Rules & Score Settings' },
 ] as const;
 
 test.describe('School Intelligence — Phases 2–6 UI', () => {
@@ -34,7 +27,7 @@ test.describe('School Intelligence — Phases 2–6 UI', () => {
     await page.goto('/dashboard/school-intelligence');
     await expect(page.getByText(/School Intelligence/i).first()).toBeVisible();
     await expect(page.getByRole('button', { name: /run full pipeline|bootstrap|refresh/i }).first()).toBeVisible({ timeout: 10_000 }).catch(() =>
-      expect(page.getByText(/Teacher Productivity|Overall/i).first()).toBeVisible()
+      expect(page.getByText(/Teacher & Staff Management|Overall/i).first()).toBeVisible()
     );
   });
 

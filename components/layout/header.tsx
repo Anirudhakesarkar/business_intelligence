@@ -37,7 +37,7 @@ export function Header({ onMenuClick }: { onMenuClick?: () => void }) {
         )}
         <NotificationBell />
         <Link
-          href="/dashboard/settings"
+          href="/dashboard/school-management/settings"
           className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md text-slate-400 hover:bg-slate-800 hover:text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
           aria-label="Settings"
         >

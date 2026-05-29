@@ -67,7 +67,7 @@ describe('phase6 e2e acceptance gate', () => {
     assert.match(assertGptAfterScores(1, date) ?? '', /Phase 4|summaries/i);
 
     const evaluation = evaluateRules(1, { from: `${date}T00:00:00.000Z`, to: `${date}T23:59:59.999Z` });
-    assert.ok((evaluation?.eventsCreated ?? evaluation?.created ?? 0) >= 0);
+    assert.ok((!evaluation.skipped ? evaluation.created : 0) >= 0);
 
     aggregateDay(1, date);
     status = getPipelinePhaseStatus(1, date);

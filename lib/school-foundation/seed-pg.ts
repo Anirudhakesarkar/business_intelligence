@@ -213,9 +213,54 @@ export async function seedDemoSchoolPg(organizationId = 1) {
 
   await clearFoundationForOrg(organizationId);
 
+  const result = await seedFoundationHierarchyPg(organizationId, 'Greenfield International School');
+  await tagCurrentFoundationAsDemo(organizationId);
+  await hydrateFoundationFromPg();
+
+  const health = getSetupHealth(organizationId);
+  return {
+    siteId: result.siteId,
+    organizationId,
+    storage: 'postgres' as const,
+    counts: result.counts,
+    setupHealth: health,
+  };
+}
+
+/** Seed campus hierarchy when no sites exist; does not tag demo entities or wipe intelligence tables. */
+export async function seedFoundationIfEmptyPg(organizationId = 1) {
+  if (!isDbEnabled()) {
+    throw new Error('Postgres is not configured');
+  }
+
+  const existing = await countFoundationForOrg(organizationId);
+  if ((existing.sites ?? 0) > 0) {
+    await hydrateFoundationFromPg();
+    return { skipped: true, reason: 'foundation_exists' as const, counts: existing, storage: 'postgres' as const };
+  }
+
+  const { removeOrphanSpatialRows } = await import('./repos/orphan-spatial');
+  await removeOrphanSpatialRows({ dryRun: false });
+  resetStoreForSeed();
+
+  const result = await seedFoundationHierarchyPg(organizationId, 'Main Campus');
+  await hydrateFoundationFromPg();
+
+  const health = getSetupHealth(organizationId);
+  return {
+    skipped: false,
+    siteId: result.siteId,
+    organizationId,
+    storage: 'postgres' as const,
+    counts: result.counts,
+    setupHealth: health,
+  };
+}
+
+async function seedFoundationHierarchyPg(organizationId: number, siteName: string) {
   const site = await createSite({
     organizationId,
-    name: 'Greenfield International School',
+    name: siteName,
     address: '12 Campus Road',
     isActive: true,
   });
@@ -455,14 +500,9 @@ export async function seedDemoSchoolPg(organizationId = 1) {
   });
 
   syncSectionRoomMappingsFromTimetable(organizationId);
-  await tagCurrentFoundationAsDemo(organizationId);
-  await hydrateFoundationFromPg();
 
-  const health = getSetupHealth(organizationId);
   return {
     siteId: site.id,
-    organizationId,
-    storage: 'postgres' as const,
     counts: {
       sites: 1,
       buildings: 2,
@@ -479,6 +519,5 @@ export async function seedDemoSchoolPg(organizationId = 1) {
       roster: rosterCount,
       calendar: 35,
     },
-    setupHealth: health,
   };
 }

@@ -13,7 +13,7 @@ import { buildCopilotPrompt } from './context-builder';
 
 function sampleCtx(): SchoolGptContext {
   return {
-    contract_version: 1,
+    contract_version: 'school-gpt-v1',
     date: '2099-01-01',
     org_id: 1,
     timezone: 'Asia/Kolkata',
@@ -62,7 +62,7 @@ describe('school-gpt-copilot guardrails', () => {
 
   it('buildCopilotPrompt instructs insufficient data when drivers empty', () => {
     const ctx: SchoolGptContext = {
-      contract_version: 1,
+      contract_version: 'school-gpt-v1',
       date: '2099-01-01',
       org_id: 1,
       timezone: 'UTC',

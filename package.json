@@ -17,7 +17,8 @@
     "db:school:migrate": "npx tsx scripts/school-db-migrate.mjs",
     "accept:school-management": "node scripts/school-management-acceptance.mjs",
     "accept:school-management:strict": "node scripts/school-management-acceptance.mjs --strict",
-    "db:seed:cloud-zone-activity": "node scripts/seed-cloud-zone-activity.mjs"
+    "db:seed:cloud-zone-activity": "node scripts/seed-cloud-zone-activity.mjs",
+    "fill:school-intelligence-gaps": "npx tsx scripts/fill-school-intelligence-gaps.mjs"
   },
   "dependencies": {
     "@react-three/drei": "^9.88.17",

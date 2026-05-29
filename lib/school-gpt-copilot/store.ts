@@ -243,6 +243,96 @@ export function listActions(organizationId: number) {
   return actions.filter((a) => a.organizationId === organizationId);
 }
 
+function summaryDateOffset(daysAgo: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() - daysAgo);
+  return d.toISOString().slice(0, 10);
+}
+
+function isoTimestamp(daysAgo: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() - daysAgo);
+  return d.toISOString();
+}
+
+/** Demo tasks for the Action Tasks UI when no live data exists. */
+export function seedDemoActionsIfEmpty(organizationId: number) {
+  if (actions.some((a) => a.organizationId === organizationId)) return;
+
+  const seeds: Array<Omit<GptActionTask, 'id' | 'organizationId' | 'createdAt'>> = [
+    {
+      summaryDate: summaryDateOffset(0),
+      title: 'Assign floor coordinator at Gate 2 during afternoon dispersal',
+      assignee: 'Ms. Patel',
+      status: 'open',
+      dueDate: summaryDateOffset(0),
+      recommendationId: 1,
+    },
+    {
+      summaryDate: summaryDateOffset(1),
+      title: 'Review supervision roster for Period 3–4 math block',
+      assignee: 'Mr. Sharma',
+      status: 'open',
+      dueDate: summaryDateOffset(2),
+    },
+    {
+      summaryDate: summaryDateOffset(2),
+      title: 'Confirm CCTV coverage for east corridor during lunch break',
+      assignee: 'Security desk',
+      status: 'open',
+      dueDate: summaryDateOffset(1),
+    },
+    {
+      summaryDate: summaryDateOffset(3),
+      title: 'Brief teachers on revised dispersal queue protocol',
+      assignee: 'Principal office',
+      status: 'completed',
+      dueDate: summaryDateOffset(4),
+      completedAt: isoTimestamp(1),
+    },
+    {
+      summaryDate: summaryDateOffset(5),
+      title: 'Audit fire exit signage near Science Block Level 2',
+      assignee: 'Facilities',
+      status: 'completed',
+      dueDate: summaryDateOffset(4),
+      completedAt: isoTimestamp(3),
+      recommendationId: 2,
+    },
+    {
+      summaryDate: summaryDateOffset(4),
+      title: 'Follow up on overcrowding alert — Room B-204 capacity plan',
+      assignee: 'Academic coordinator',
+      status: 'completed',
+      dueDate: summaryDateOffset(3),
+      completedAt: isoTimestamp(4),
+    },
+    {
+      summaryDate: summaryDateOffset(6),
+      title: 'Reschedule parent pickup briefing (duplicate calendar entry)',
+      assignee: 'Reception',
+      status: 'cancelled',
+      dueDate: summaryDateOffset(5),
+    },
+    {
+      summaryDate: summaryDateOffset(2),
+      title: 'Verify substitute teacher check-in for homeroom 8B',
+      assignee: 'Unassigned',
+      status: 'open',
+      dueDate: summaryDateOffset(0),
+    },
+  ];
+
+  seeds.forEach((seed, index) => {
+    actions.push({
+      ...seed,
+      id: nextActionId++,
+      organizationId,
+      createdAt: isoTimestamp(Math.min(7, index + 1)),
+    });
+  });
+}
+
 function shiftDate(iso: string, days: number) {
   const d = new Date(`${iso}T12:00:00.000Z`);
   d.setUTCDate(d.getUTCDate() + days);

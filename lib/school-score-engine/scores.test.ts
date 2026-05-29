@@ -12,6 +12,6 @@ describe('school-score-engine', () => {
     const profile = getActiveWeightProfile(1, date);
     assert.ok(profile.weights.safety >= 0.15);
     const result = calculateScoresForDay(1, date);
-    assert.ok(result.overall.overallScore >= 0 && result.overall.overallScore <= 100);
+    assert.ok(result.overall!.overallScore >= 0 && result.overall!.overallScore <= 100);
   });
 });

@@ -52,3 +52,37 @@ export function scoreCompareLabel(dateRange: SIDateRange, from: string, to: stri
   const days = periodLengthDays(from, to);
   return days === 1 ? 'vs prior day' : `vs prior ${days} days`;
 }
+
+/** ISO instants for API queries and timestamp comparisons. */
+export function resolveSIFilterInstantBounds(filters: SIFilters): { from: string; to: string } {
+  if (filters.dateRange === '24h') {
+    const to = new Date();
+    const from = new Date(to.getTime() - 24 * 60 * 60 * 1000);
+    return { from: from.toISOString(), to: to.toISOString() };
+  }
+  const { from, to } = resolveSIFilterDates(filters);
+  return {
+    from: `${from}T00:00:00.000Z`,
+    to: `${to}T23:59:59.999Z`,
+  };
+}
+
+export function isInstantInSIFilterPeriod(iso: string, filters: SIFilters): boolean {
+  const { from, to } = resolveSIFilterInstantBounds(filters);
+  return iso >= from && iso <= to;
+}
+
+function formatShortDate(iso: string): string {
+  return new Date(`${iso}T12:00:00`).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+  });
+}
+
+/** Human-readable active period for page headers and KPIs. */
+export function formatSIFilterPeriodLabel(filters: SIFilters): string {
+  if (filters.dateRange === '24h') return 'Last 24 hours';
+  const { from, to } = resolveSIFilterDates(filters);
+  if (from === to) return formatShortDate(from);
+  return `${formatShortDate(from)} – ${formatShortDate(to)}`;
+}

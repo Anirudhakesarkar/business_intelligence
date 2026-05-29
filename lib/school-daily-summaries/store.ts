@@ -37,7 +37,7 @@ const complianceRows: ComplianceDailyRow[] = [];
 const scoreInputsRows: ScoreInputsRow[] = [];
 
 const MODULE_LABELS: Record<DailySummaryModule, string> = {
-  teacher: 'Teacher Productivity',
+  teacher: 'Teacher & Staff Management',
   classroom: 'Academic Operations',
   occupancy: 'Student Occupancy',
   process: 'Campus Process',
@@ -406,7 +406,6 @@ export function aggregateDay(organizationId: number, date: string, siteId?: numb
     },
     aggregatedAt: now,
   };
-  void persistDailyAggregation(organizationId, date);
   return result;
 }
 
@@ -420,17 +419,29 @@ export async function aggregateDayPersisted(organizationId: number, date: string
 }
 
 export function hasDailySummariesForDate(organizationId: number, date: string, siteId?: number) {
-  return rowsForModule('teacher', organizationId, date, siteId).length > 0;
+  const modules = [
+    'teacher',
+    'classroom',
+    'occupancy',
+    'process',
+    'staff',
+    'space',
+    'discipline',
+    'parent',
+    'compliance',
+  ] as const;
+  return modules.some((m) => rowsForModule(m, organizationId, date, siteId).length > 0);
 }
 
 /** Hydrate Phase 4 daily rows from Postgres when memory is empty for this date. */
 export async function ensureDailySummariesForDate(organizationId: number, date: string, siteId?: number) {
+  if (!isDbEnabled()) return { source: 'none' as const };
+  const loaded = await loadDailyAggregationFromPg(organizationId, date, dailyDb);
+  if (loaded) return { source: 'postgres' as const };
   if (hasDailySummariesForDate(organizationId, date, siteId)) {
     return { source: 'memory' as const };
   }
-  if (!isDbEnabled()) return { source: 'none' as const };
-  const loaded = await loadDailyAggregationFromPg(organizationId, date, dailyDb);
-  return { source: loaded ? ('postgres' as const) : ('none' as const) };
+  return { source: 'none' as const };
 }
 
 function headlineFromRows(rows: { metrics: Record<string, unknown>; facts: SummaryFact[] }[]): ModuleOverviewSlice {

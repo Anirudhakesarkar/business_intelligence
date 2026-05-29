@@ -2,22 +2,28 @@
 
 import { useState, useMemo, useCallback } from 'react';
 import Link from 'next/link';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { SchoolIntelligenceBreadcrumbs } from '@/components/school-intelligence/SchoolIntelligenceBreadcrumbs';
+import { SIFilterBar } from '@/components/school-intelligence/SIFilterBar';
 import { usePageHeaderRefresh } from '@/components/layout/page-header-context';
+import { useCameras, useZones } from '@/components/school-management/useSchoolFoundation';
 import {
   useEvaluateRules,
   useIntelligenceEvents,
   useSeedRuleEngine,
 } from '@/components/school-intelligence/useSchoolRuleEngine';
-import { useCameras, useZones } from '@/components/school-management/useSchoolFoundation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { useQueryClient } from '@tanstack/react-query';
 import {
   ShieldCheck, Play, AlertTriangle, AlertCircle,
   CheckCircle2, Clock, Filter, ChevronRight, Inbox,
 } from 'lucide-react';
+import type { SIFilters } from '@/lib/school-intelligence/types';
+import { resolveOrganizationId } from '@/lib/school-intelligence/resolve-org-id';
+import {
+  resolveSIFilterInstantBounds,
+  formatSIFilterPeriodLabel,
+} from '@/lib/school-intelligence/date-range';
 
 type IntelligenceEvent = {
   id: number;
@@ -38,8 +44,16 @@ const EVENT_TYPE_OPTIONS = [
   'TeacherSupervisionGap',
   'GateCongestion',
   'DispersalDelay',
+  'ArrivalCongestion',
+  'VehicleStudentOverlap',
+  'ReceptionQueueHigh',
   'CriticalCameraOffline',
+  'FireExitObstruction',
+  'RestrictedZoneEntry',
+  'ServerRoomEntry',
+  'EmergencyExitCrowding',
   'RunningDetected',
+  'UnsafeClimbing',
   'FallDetected',
 ] as const;
 
@@ -69,14 +83,6 @@ const MODULE_COLORS: Record<string, string> = {
   Compliance: 'text-amber-400',
 };
 
-function todayIso() {
-  return new Date().toISOString().slice(0, 10);
-}
-
-function dayEndIso(d: string) {
-  return `${d}T23:59:59.999Z`;
-}
-
 function SeverityBadge({ severity }: { severity: string }) {
   const cfg = SEVERITY_CONFIG[severity as keyof typeof SEVERITY_CONFIG] ?? SEVERITY_CONFIG.Low;
   return <span className={`inline-flex rounded border px-1.5 py-0.5 text-xs font-medium ${cfg.cls}`}>{severity}</span>;
@@ -93,14 +99,15 @@ type BuildingRow = { id: number; siteId: number };
 
 export default function EventsInboxPage() {
   const qc = useQueryClient();
-  const [statusFilter, setStatusFilter] = useState('Open');
+  const [filters, setFilters] = useState<SIFilters>({ organizationId: '', siteId: '', dateRange: '7d' });
+  const orgId = resolveOrganizationId(filters);
+  const { from: periodFrom, to: periodTo } = resolveSIFilterInstantBounds(filters);
+  const periodLabel = formatSIFilterPeriodLabel(filters);
+  const [statusFilter, setStatusFilter] = useState('All');
   const [severityFilter, setSeverityFilter] = useState('');
   const [moduleFilter, setModuleFilter] = useState('');
   const [eventTypeFilter, setEventTypeFilter] = useState('');
-  const [fromDate, setFromDate] = useState('');
-  const [toDate, setToDate] = useState('');
   const [zoneFilter, setZoneFilter] = useState('');
-  const [siteFilter, setSiteFilter] = useState('');
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [bulkPending, setBulkPending] = useState(false);
 
@@ -111,16 +118,12 @@ export default function EventsInboxPage() {
     (camerasPayload as { cameras?: { id: number; zoneId?: number }[] })?.cameras ?? [];
 
   const { data: floorsData } = useQuery({
-    queryKey: ['intel-floors', 1],
+    queryKey: ['intel-floors', orgId],
     queryFn: async () => (await fetch('/api/floors')).json(),
   });
   const { data: buildingsData } = useQuery({
-    queryKey: ['intel-buildings', 1],
+    queryKey: ['intel-buildings', orgId],
     queryFn: async () => (await fetch('/api/buildings')).json(),
-  });
-  const { data: sitesData } = useQuery({
-    queryKey: ['intel-sites', 1],
-    queryFn: async () => (await fetch('/api/sites?organizationId=1')).json(),
   });
 
   const floors: FloorRow[] = Array.isArray(floorsData) ? floorsData : [];
@@ -139,18 +142,33 @@ export default function EventsInboxPage() {
   }, [zones, floors, buildings]);
 
   const apiFilters = useMemo(() => {
-    const f: { status?: string; from?: string; to?: string; eventType?: string; zoneId?: number } = {};
+    const f: {
+      organizationId: number;
+      status?: string;
+      from?: string;
+      to?: string;
+      eventType?: string;
+      zoneId?: number;
+    } = { organizationId: orgId, from: periodFrom, to: periodTo };
     if (statusFilter !== 'All') f.status = statusFilter;
-    if (fromDate) f.from = `${fromDate}T00:00:00.000Z`;
-    if (toDate) f.to = dayEndIso(toDate);
     if (eventTypeFilter) f.eventType = eventTypeFilter;
     if (zoneFilter) f.zoneId = Number(zoneFilter);
     return f;
-  }, [statusFilter, fromDate, toDate, eventTypeFilter, zoneFilter]);
+  }, [orgId, periodFrom, periodTo, statusFilter, eventTypeFilter, zoneFilter]);
 
-  const { data, isLoading, refetch } = useIntelligenceEvents(apiFilters);
+  const { data, isLoading, isError, error, refetch } = useIntelligenceEvents(apiFilters);
   const seed = useSeedRuleEngine();
-  const evaluate = useEvaluateRules();
+  const evaluate = useEvaluateRules(orgId);
+  const { data: dbStatus } = useQuery({
+    queryKey: ['school-db-status'],
+    queryFn: async () => {
+      const res = await fetch('/api/school-db/status');
+      if (!res.ok) throw new Error('Failed to load DB status');
+      return res.json() as Promise<{ demoUi?: { enabled?: boolean } }>;
+    },
+    staleTime: 60_000,
+  });
+  const showDevTools = dbStatus?.demoUi?.enabled === true;
 
   const allEvents: IntelligenceEvent[] = (data as { events?: IntelligenceEvent[] })?.events ?? [];
 
@@ -158,8 +176,8 @@ export default function EventsInboxPage() {
     return allEvents.filter((e) => {
       if (severityFilter && e.severity !== severityFilter) return false;
       if (moduleFilter && e.module !== moduleFilter) return false;
-      if (siteFilter) {
-        const sid = Number(siteFilter);
+      if (filters.siteId) {
+        const sid = Number(filters.siteId);
         const cam = e.cameraId ? cameras.find((c) => c.id === e.cameraId) : undefined;
         const zid = e.zoneId ?? cam?.zoneId;
         const siteId = zid != null ? zoneToSiteId.get(zid) : undefined;
@@ -167,7 +185,7 @@ export default function EventsInboxPage() {
       }
       return true;
     });
-  }, [allEvents, severityFilter, moduleFilter, siteFilter, zoneToSiteId, cameras]);
+  }, [allEvents, severityFilter, moduleFilter, filters.siteId, zoneToSiteId, cameras]);
 
   const modules = useMemo(() => [...new Set(allEvents.map((e) => e.module))], [allEvents]);
 
@@ -234,9 +252,10 @@ export default function EventsInboxPage() {
   const isHealthyDay =
     allEvents.length === 0 &&
     !isLoading &&
-    fromDate === todayIso() &&
-    (toDate === '' || toDate === fromDate) &&
-    eventTypeFilter === '';
+    !isError &&
+    filters.dateRange === '24h' &&
+    eventTypeFilter === '' &&
+    statusFilter === 'All';
 
   const handleRefresh = useCallback(() => {
     void refetch();
@@ -247,17 +266,26 @@ export default function EventsInboxPage() {
   return (
     <div className="space-y-6">
       <SchoolIntelligenceBreadcrumbs current="Events inbox" />
+      <SIFilterBar filters={filters} onChange={setFilters} />
 
-      <div className="flex flex-wrap gap-2">
-        <Button size="sm" onClick={() => seed.mutate()} disabled={seed.isPending}>
-          <ShieldCheck className="mr-1 h-3 w-3" />
-          {seed.isPending ? 'Seeding…' : 'Seed rules + signals'}
-        </Button>
-        <Button size="sm" variant="secondary" onClick={() => evaluate.mutate()} disabled={evaluate.isPending}>
-          <Play className="mr-1 h-3 w-3" />
-          {evaluate.isPending ? 'Evaluating…' : 'Evaluate rules'}
-        </Button>
-      </div>
+      {isError && (
+        <div className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
+          Failed to load events: {error instanceof Error ? error.message : 'Unknown error'}
+        </div>
+      )}
+
+      {showDevTools && (
+        <div className="flex flex-wrap gap-2">
+          <Button size="sm" onClick={() => seed.mutate()} disabled={seed.isPending}>
+            <ShieldCheck className="mr-1 h-3 w-3" />
+            {seed.isPending ? 'Seeding…' : 'Seed rules + signals'}
+          </Button>
+          <Button size="sm" variant="secondary" onClick={() => evaluate.mutate()} disabled={evaluate.isPending}>
+            <Play className="mr-1 h-3 w-3" />
+            {evaluate.isPending ? 'Evaluating…' : 'Evaluate rules'}
+          </Button>
+        </div>
+      )}
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Card className="border-red-900/40 bg-red-950/20">
@@ -305,24 +333,7 @@ export default function EventsInboxPage() {
 
         <div className="flex flex-wrap items-end gap-3 rounded-lg border border-slate-800 bg-slate-900/40 p-3">
           <Filter className="h-3.5 w-3.5 text-slate-500 self-center" />
-          <label className="flex flex-col gap-1 text-xs text-slate-500">
-            From
-            <input
-              type="date"
-              value={fromDate}
-              onChange={(e) => setFromDate(e.target.value)}
-              className="rounded border border-slate-700 bg-slate-950 px-2 py-1.5 text-xs text-slate-200"
-            />
-          </label>
-          <label className="flex flex-col gap-1 text-xs text-slate-500">
-            To
-            <input
-              type="date"
-              value={toDate}
-              onChange={(e) => setToDate(e.target.value)}
-              className="rounded border border-slate-700 bg-slate-950 px-2 py-1.5 text-xs text-slate-200"
-            />
-          </label>
+          <p className="self-center text-xs text-slate-500">{periodLabel}</p>
           <label className="flex flex-col gap-1 text-xs text-slate-500">
             Event type
             <select
@@ -374,18 +385,6 @@ export default function EventsInboxPage() {
               </option>
             ))}
           </select>
-          <select
-            value={siteFilter}
-            onChange={(e) => setSiteFilter(e.target.value)}
-            className="rounded border border-slate-700 bg-slate-950 px-2 py-1.5 text-xs text-slate-200"
-          >
-            <option value="">All sites</option>
-            {(Array.isArray(sitesData) ? sitesData : []).map((s: { id: number; name: string }) => (
-              <option key={s.id} value={String(s.id)}>
-                {s.name}
-              </option>
-            ))}
-          </select>
         </div>
 
         {selected.size > 0 && (
@@ -410,14 +409,14 @@ export default function EventsInboxPage() {
         <div className="rounded-lg border border-dashed border-emerald-800/50 bg-emerald-950/10 p-8 text-center">
           <Inbox className="mx-auto mb-2 h-8 w-8 text-emerald-600" />
           <p className="text-sm font-medium text-emerald-300">Healthy day — no intelligence events for today.</p>
-          <p className="mt-1 text-xs text-slate-500">Widen the date range or seed demo data to see sample events.</p>
+          <p className="mt-1 text-xs text-slate-500">Widen the date range or run the daily pipeline for this period.</p>
         </div>
       ) : events.length === 0 ? (
         <div className="rounded-lg border border-dashed border-slate-700 p-8 text-center">
           <Inbox className="mx-auto mb-2 h-8 w-8 text-slate-600" />
           <p className="text-sm text-slate-500">
             {allEvents.length === 0
-              ? 'No events yet. Seed rules + signals, then evaluate.'
+              ? 'No events for this organization and date range. Run the daily pipeline or widen the filter.'
               : 'No events match the current filters.'}
           </p>
         </div>

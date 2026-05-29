@@ -1,10 +1,12 @@
 'use client';
 
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { usePathname } from 'next/navigation';
 import { isSchoolIntelligencePath } from '@/lib/layout/page-header-routes';
 import { SIModuleHeader } from './SIModuleHeader';
 import { SchoolIntelligenceBreadcrumbs } from './SchoolIntelligenceBreadcrumbs';
+import { SIFilterBar } from './SIFilterBar';
+import type { SIFilters } from '@/lib/school-intelligence/types';
 
 type Tone = 'sky' | 'indigo' | 'violet' | 'emerald' | 'amber' | 'rose' | 'slate';
 
@@ -44,11 +46,13 @@ export function SIPageShell({
 }: Props) {
   const pathname = usePathname();
   const useStickyHeader = isSchoolIntelligencePath(pathname);
+  const [filters, setFilters] = useState<SIFilters>({ organizationId: '', siteId: '', dateRange: '7d' });
 
   return (
     <div className="space-y-7">
       <div className="space-y-4">
         <SchoolIntelligenceBreadcrumbs current={currentCrumb ?? title} parent={parentCrumb} />
+        <SIFilterBar filters={filters} onChange={setFilters} />
         {banner}
         {useStickyHeader ? (
           actions ? (

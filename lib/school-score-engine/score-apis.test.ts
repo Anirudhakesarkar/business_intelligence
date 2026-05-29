@@ -23,7 +23,7 @@ describe('school-score-engine APIs', () => {
     await seedSchoolDailySummariesPipeline(1, date);
     const result = calculateScoresForDay(1, date);
     assert.equal(result.skipped, false);
-    assert.ok(result.overall.overallScore >= 0);
+    assert.ok(result.overall!.overallScore >= 0);
     assert.equal(listModuleScores(1, date).length, 10);
   });
 
@@ -32,8 +32,10 @@ describe('school-score-engine APIs', () => {
     const date = '2099-07-11';
     await seedDemoSchool(1);
     await seedSchoolDailySummariesPipeline(1, date);
-    const a = calculateScoresForDay(1, date).overall.overallScore;
-    const b = calculateScoresForDay(1, date).overall.overallScore;
+    const _ra = calculateScoresForDay(1, date);
+    const _rb = calculateScoresForDay(1, date);
+    const a = _ra.overall!.overallScore;
+    const b = _rb.overall!.overallScore;
     assert.equal(a, b);
   });
 

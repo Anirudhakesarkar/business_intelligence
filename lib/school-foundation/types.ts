@@ -10,7 +10,7 @@ export type RiskCategory = 'Staircase' | 'Gate' | 'Lab' | 'Playground' | 'Server
 export type Site = { id: number; organizationId: number; name: string; address?: string; isActive: boolean };
 export type Building = { id: number; siteId: number; name: string; isActive: boolean };
 export type Floor = { id: number; buildingId: number; name: string; levelNo: number };
-export type Zone = { id: number; floorId?: number; name: string; zoneType: string; isRiskZone: boolean; riskCategory?: RiskCategory; capacity?: number };
+export type Zone = { id: number; floorId?: number; organizationId?: number; name: string; zoneType: string; isRiskZone: boolean; riskCategory?: RiskCategory; capacity?: number };
 export type Room = { id: number; zoneId?: number; roomCode: string; roomName: string; roomType: string; capacity: number; isActive: boolean };
 export type SchoolCamera = {
   id: number; organizationId: number; zoneId?: number; roomId?: number;
