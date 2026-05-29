@@ -280,20 +280,29 @@ function SectionView({
 // ─── Entry form sheet (add / edit) ─────────────────────────────────────────────
 function EntrySheet({ open, onClose, editing, allSections }: { open: boolean; onClose: () => void; editing: Row | null; allSections: Row[] }) {
   const qc = useQueryClient();
-  const { data: classes = [] } = useClasses();
+  const { data: classesRaw = [] } = useClasses();
   const [classId, setClassId] = useState('');
-  const { data: sections = [] } = useSections(classId ? Number(classId) : undefined);
-  const { data: subjects = [] } = useSubjects();
-  const { data: teachers = [] } = useTeachers();
-  const { data: rooms = [] } = useRooms();
+  const { data: sectionsRaw = [] } = useSections(classId ? Number(classId) : undefined);
+  const { data: subjectsRaw = [] } = useSubjects();
+  const { data: teachersRaw = [] } = useTeachers();
+  const { data: roomsRaw = [] } = useRooms();
+
+  const classes  = Array.isArray(classesRaw)  ? classesRaw  : [];
+  const sections = Array.isArray(sectionsRaw) ? sectionsRaw : [];
+  const subjects = Array.isArray(subjectsRaw) ? subjectsRaw : [];
+  const teachers = Array.isArray(teachersRaw) ? teachersRaw : [];
+  const rooms    = Array.isArray(roomsRaw)    ? roomsRaw    : [];
+
   const [form, setForm] = useState({ sectionId: '', subjectId: '', teacherId: '', roomId: '', periodType: 'Period', dayOfWeek: '1', startTime: '08:00', endTime: '08:45' });
-  const [err, setErr] = useState('');
+  const [errs, setErrs] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (!open) return;
     if (editing) {
-      const sec = allSections.find((s) => s.id === editing.sectionId);
-      setClassId(sec ? String(sec.classId) : '');
+      // Fix: use Number() coercion so string-vs-number ids both match
+      const sec = allSections.find((s) => Number(s.id) === Number(editing.sectionId));
+      const cid = sec ? String(sec.classId) : '';
+      setClassId(cid);
       setForm({
         sectionId: String(editing.sectionId ?? ''),
         subjectId: editing.subjectId ? String(editing.subjectId) : '',
@@ -308,35 +317,44 @@ function EntrySheet({ open, onClose, editing, allSections }: { open: boolean; on
       setClassId('');
       setForm({ sectionId: '', subjectId: '', teacherId: '', roomId: '', periodType: 'Period', dayOfWeek: '1', startTime: '08:00', endTime: '08:45' });
     }
-    setErr('');
+    setErrs({});
   }, [editing, open, allSections]);
 
   const create = useMutation({
     mutationFn: (b: unknown) => schoolApiPost('/api/timetable', b),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['sm-timetable'] }); qc.invalidateQueries({ queryKey: ['sm-setup-health'] }); onClose(); setErr(''); },
-    onError: (e: Error) => setErr(e.message),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['sm-timetable'] }); qc.invalidateQueries({ queryKey: ['sm-setup-health'] }); onClose(); setErrs({}); },
+    onError: (e: Error) => setErrs({ _api: e.message }),
   });
   const patch = useMutation({
     mutationFn: ({ id, body }: { id: number; body: unknown }) => schoolApiPatch(`/api/timetable/${id}`, body),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['sm-timetable'] }); qc.invalidateQueries({ queryKey: ['sm-setup-health'] }); onClose(); setErr(''); },
-    onError: (e: Error) => setErr(e.message),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['sm-timetable'] }); qc.invalidateQueries({ queryKey: ['sm-setup-health'] }); onClose(); setErrs({}); },
+    onError: (e: Error) => setErrs({ _api: e.message }),
   });
 
-  const classOpts = (Array.isArray(classes) ? classes : []).map((c: Row) => ({ label: String(c.name), value: String(c.id) }));
-  const secOpts = (Array.isArray(sections) ? sections : []).map((s: Row) => ({ label: String(s.name), value: String(s.id) }));
-  const subOpts = (Array.isArray(subjects) ? subjects : []).map((s: Row) => ({ label: String(s.name), value: String(s.id) }));
-  const tchOpts = (Array.isArray(teachers) ? teachers : []).map((t: Row) => ({ label: String(t.name), value: String(t.id) }));
-  const roomOpts = (Array.isArray(rooms) ? rooms : []).map((r: Row) => ({ label: `${r.roomCode} — ${r.roomName}`, value: String(r.id) }));
-  const dayOpts = DAYS.map((d, i) => ({ label: d, value: String(i + 1) }));
-  const ptOpts = PERIOD_TYPES.map((p) => ({ label: p, value: p }));
+  const classOpts = classes.map((c: Row) => ({ label: String(c.name), value: String(c.id) }));
+  const secOpts   = sections.map((s: Row) => ({ label: String(s.name), value: String(s.id) }));
+  const subOpts   = subjects.map((s: Row) => ({ label: String(s.name), value: String(s.id) }));
+  const tchOpts   = teachers.map((t: Row) => ({ label: String(t.name), value: String(t.id) }));
+  const roomOpts  = rooms.map((r: Row) => ({ label: `${r.roomCode} — ${r.roomName}`, value: String(r.id) }));
+  const dayOpts   = DAYS.map((d, i) => ({ label: d, value: String(i + 1) }));
+  const ptOpts    = PERIOD_TYPES.map((p) => ({ label: p, value: p }));
 
-  const set = (k: string) => (v: string) => setForm((f) => ({ ...f, [k]: v }));
+  const set = (k: string) => (v: string) => { setErrs({}); setForm((f) => ({ ...f, [k]: v })); };
+
+  const validate = (): Record<string, string> => {
+    const e: Record<string, string> = {};
+    if (!classId) e.classId = 'Please select a class first';
+    if (!form.sectionId) e.sectionId = 'Section is required';
+    if (!form.dayOfWeek) e.dayOfWeek = 'Day is required';
+    if (!form.startTime || !form.endTime) e.startTime = 'Start and end times are required';
+    else if (form.endTime <= form.startTime) e.endTime = 'End time must be after start time';
+    if (!form.roomId) e.roomId = 'Room is required';
+    return e;
+  };
 
   const save = () => {
-    if (!form.sectionId) return setErr('Section is required');
-    if (!form.roomId) return setErr('Room is required');
-    if (!form.startTime || !form.endTime) return setErr('Times are required');
-    if (form.endTime <= form.startTime) return setErr('End time must be after start time');
+    const e = validate();
+    if (Object.keys(e).length) return setErrs(e);
     const body = {
       sectionId: Number(form.sectionId),
       subjectId: form.subjectId ? Number(form.subjectId) : undefined,
@@ -355,20 +373,31 @@ function EntrySheet({ open, onClose, editing, allSections }: { open: boolean; on
     <Sheet open={open} onClose={onClose}>
       <SHdr title={editing ? 'Edit Timetable Entry' : 'Add Timetable Entry'} onClose={onClose} />
       <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
-        {err && <p className="rounded bg-red-500/10 px-3 py-2 text-xs text-red-400">{err}</p>}
-        <FormField label="Class"><FSelect value={classId} onChange={setClassId} options={classOpts} /></FormField>
-        <FormField label="Section *"><FSelect value={form.sectionId} onChange={set('sectionId')} options={secOpts} /></FormField>
+        {errs._api && <p className="rounded bg-red-500/10 px-3 py-2 text-xs text-red-400">{errs._api}</p>}
+        <div className="rounded-md border border-slate-700/50 bg-slate-800/30 px-3 py-2 text-xs text-slate-500">
+          Select a <span className="text-slate-300">Class</span> to load its sections, then fill the schedule details.
+        </div>
+        <FormField label="Class *" error={errs.classId}>
+          <FSelect value={classId} onChange={(v) => { setErrs({}); setClassId(v); setForm((f) => ({ ...f, sectionId: '' })); }} options={classOpts} />
+        </FormField>
+        <FormField label="Section *" error={errs.sectionId}>
+          <FSelect value={form.sectionId} onChange={set('sectionId')} options={secOpts} />
+          {classId && secOpts.length === 0 && <p className="text-xs text-slate-500">No sections for this class — add them in Master Data.</p>}
+        </FormField>
         <div className="grid grid-cols-2 gap-3">
-          <FormField label="Day of week *"><FSelect value={form.dayOfWeek} onChange={set('dayOfWeek')} options={dayOpts} /></FormField>
+          <FormField label="Day of week *" error={errs.dayOfWeek}><FSelect value={form.dayOfWeek} onChange={set('dayOfWeek')} options={dayOpts} /></FormField>
           <FormField label="Period type"><FSelect value={form.periodType} onChange={set('periodType')} options={ptOpts} /></FormField>
         </div>
         <div className="grid grid-cols-2 gap-3">
-          <FormField label="Start time *"><FInput type="time" value={form.startTime} onChange={set('startTime')} /></FormField>
-          <FormField label="End time *"><FInput type="time" value={form.endTime} onChange={set('endTime')} /></FormField>
+          <FormField label="Start time *" error={errs.startTime}><FInput type="time" value={form.startTime} onChange={set('startTime')} /></FormField>
+          <FormField label="End time *" error={errs.endTime}><FInput type="time" value={form.endTime} onChange={set('endTime')} /></FormField>
         </div>
         <FormField label="Subject"><FSelect value={form.subjectId} onChange={set('subjectId')} options={subOpts} /></FormField>
         <FormField label="Teacher"><FSelect value={form.teacherId} onChange={set('teacherId')} options={tchOpts} /></FormField>
-        <FormField label="Room *"><FSelect value={form.roomId} onChange={set('roomId')} options={roomOpts} /></FormField>
+        <FormField label="Room *" error={errs.roomId}>
+          <FSelect value={form.roomId} onChange={set('roomId')} options={roomOpts} />
+          {roomOpts.length === 0 && <p className="text-xs text-slate-500">No rooms found — add rooms in Master Data first.</p>}
+        </FormField>
       </div>
       <div className="border-t border-slate-800 px-6 py-4 flex gap-2 justify-end flex-shrink-0">
         <Button variant="outline" onClick={onClose}>Cancel</Button>

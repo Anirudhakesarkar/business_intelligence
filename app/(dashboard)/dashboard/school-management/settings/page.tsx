@@ -1,10 +1,14 @@
 'use client';
 import { useEffect, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { SMPageHeader } from '@/components/school-management/SMPageHeader';
 import { useSetupHealth } from '@/components/school-management/useSchoolFoundation';
 import { schoolFetch } from '@/lib/school-auth/client-fetch';
+import { schoolApiGet } from '@/lib/school-management/api';
+
+const ORG_ID = 1;
 
 type ChecklistItem = { id: string; label: string; required: boolean };
 
@@ -32,43 +36,47 @@ type AuditEntry = { id: number; action: string; entityType: string; entityId?: n
 export default function Page() {
   const { data } = useSetupHealth();
   const [settings, setSettings] = useState<Settings | null>(null);
-  const [zones, setZones] = useState<Zone[]>([]);
-  const [classroomCam, setClassroomCam] = useState<Camera | null>(null);
   const [boardJson, setBoardJson] = useState('[[0,0],[100,0],[100,40]]');
   const [deskJson, setDeskJson] = useState('[[0,50],[100,50],[100,100]]');
   const [audit, setAudit] = useState<AuditEntry[]>([]);
   const [saving, setSaving] = useState(false);
 
-  const load = () => {
+  // Shared-cache queries — same keys as cameras/timetable/staff-duty pages
+  const { data: zonesData } = useQuery({
+    queryKey: ['sm-zones', ORG_ID],
+    queryFn: () => schoolApiGet<Zone[]>(`/api/zones?organizationId=${ORG_ID}`),
+  });
+  const zones: Zone[] = Array.isArray(zonesData) ? zonesData : [];
+
+  const { data: camerasData } = useQuery({
+    queryKey: ['sm-cameras', ORG_ID],
+    queryFn: () => schoolApiGet<Camera[]>(`/api/cameras?organizationId=${ORG_ID}`),
+  });
+  const classroomCam: Camera | null = (() => {
+    const cams = Array.isArray(camerasData) ? camerasData : [];
+    return cams.find((c) => c.purpose === 'Classroom') ?? cams[0] ?? null;
+  })();
+
+  // Populate polygon fields when classroomCam loads
+  useEffect(() => {
+    if (classroomCam?.metadata?.teachingZones?.boardPolygon) {
+      setBoardJson(JSON.stringify(classroomCam.metadata.teachingZones.boardPolygon));
+      setDeskJson(JSON.stringify(classroomCam.metadata.teachingZones.deskPolygon ?? []));
+    }
+  }, [classroomCam?.id]);
+
+  const loadSettings = () => {
     void schoolFetch('/api/school-management/settings?organizationId=1')
       .then((r) => r.json())
-      .then((s: Settings) => {
-        setSettings(s);
-      })
+      .then((s: Settings) => setSettings(s))
       .catch(() => setSettings(null));
-    void schoolFetch('/api/zones?organizationId=1')
-      .then((r) => r.json())
-      .then((payload) => setZones(Array.isArray(payload) ? payload : []))
-      .catch(() => setZones([]));
-    void schoolFetch('/api/cameras?organizationId=1')
-      .then((r) => r.json())
-      .then((payload) => {
-        const cams = Array.isArray(payload) ? (payload as Camera[]) : [];
-        const cam = cams.find((c) => c.purpose === 'Classroom') ?? cams[0] ?? null;
-        setClassroomCam(cam);
-        if (cam?.metadata?.teachingZones?.boardPolygon) {
-          setBoardJson(JSON.stringify(cam.metadata.teachingZones.boardPolygon));
-          setDeskJson(JSON.stringify(cam.metadata.teachingZones.deskPolygon ?? []));
-        }
-      })
-      .catch(() => setClassroomCam(null));
     void schoolFetch('/api/school-management/audit-log?limit=30')
       .then((r) => r.json())
       .then((j) => setAudit(Array.isArray(j?.entries) ? j.entries : []))
       .catch(() => setAudit([]));
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { loadSettings(); }, []);
 
   const updateChecklist = (id: string, patch: Partial<ChecklistItem>) => {
     if (!settings?.compliance) return;
@@ -110,7 +118,7 @@ export default function Page() {
       }
     }
     setSaving(false);
-    load();
+    loadSettings();
   };
 
   return (
@@ -171,7 +179,7 @@ export default function Page() {
           </CardContent>
         </Card>
       )}
-      <div className="flex gap-2"><Button size="sm" onClick={save} disabled={saving || !settings}>Save settings</Button><Button size="sm" variant="outline" onClick={load}>Refresh</Button></div>
+      <div className="flex gap-2"><Button size="sm" onClick={save} disabled={saving || !settings}>Save settings</Button><Button size="sm" variant="outline" onClick={loadSettings}>Refresh</Button></div>
       <Card className="border-slate-800 bg-slate-900">
         <CardHeader><CardTitle className="text-sm text-slate-200">Audit log</CardTitle></CardHeader>
         <CardContent className="max-h-72 overflow-auto text-xs text-slate-400">

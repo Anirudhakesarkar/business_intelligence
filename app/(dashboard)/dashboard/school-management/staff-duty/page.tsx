@@ -29,6 +29,12 @@ function useStaff() {
 function useZones() {
   return useQuery({ queryKey: ['sm-zones', ORG_ID], queryFn: () => schoolApiGet(`/api/zones?organizationId=${ORG_ID}`) });
 }
+function useFloors() {
+  return useQuery({ queryKey: ['sm-floors', ORG_ID], queryFn: () => schoolApiGet(`/api/floors?organizationId=${ORG_ID}`) });
+}
+function useBuildings() {
+  return useQuery({ queryKey: ['sm-buildings', ORG_ID], queryFn: () => schoolApiGet(`/api/buildings?organizationId=${ORG_ID}`) });
+}
 
 // ─── Shared atoms ─────────────────────────────────────────────────────────────
 function FormField({ label, children, error }: { label: string; children: React.ReactNode; error?: string }) {
@@ -325,16 +331,31 @@ function DutyEntrySheet({
   entry?: Row | null;
 }) {
   const qc = useQueryClient();
-  const { data: staff = [] } = useStaff();
-  const { data: zones = [] } = useZones();
+  const { data: staffRaw = [] }     = useStaff();
+  const { data: zonesRaw = [] }     = useZones();
+  const { data: floorsRaw = [] }    = useFloors();
+  const { data: buildingsRaw = [] } = useBuildings();
+
+  const staff     = Array.isArray(staffRaw)     ? staffRaw     : [];
+  const zones     = Array.isArray(zonesRaw)     ? zonesRaw     : [];
+  const floors    = Array.isArray(floorsRaw)    ? floorsRaw    : [];
+  const buildings = Array.isArray(buildingsRaw) ? buildingsRaw : [];
+
   const isEdit = Boolean(entry?.id);
   const [form, setForm] = useState(EMPTY_DUTY_FORM);
-  const [err, setErr] = useState('');
+  const [errs, setErrs] = useState<Record<string, string>>({});
 
-  const staffOpts = (Array.isArray(staff) ? staff : []).map((s: Row) => ({ label: String(s.name), value: String(s.id) }));
-  const zoneOpts = (Array.isArray(zones) ? zones : []).map((z: Row) => ({ label: String(z.name), value: String(z.id) }));
-  const dayOpts = DAYS.map((d, i) => ({ label: d, value: String(i + 1) }));
-  const dutyOpts = DUTY_TYPES.map((d) => ({ label: d, value: d }));
+  // Build zone options with floor + building context labels
+  const zoneOpts = zones.map((z: Row) => {
+    const floor    = floors.find((f) => Number(f.id) === Number(z.floorId));
+    const building = floor ? buildings.find((b) => Number(b.id) === Number(floor.buildingId)) : null;
+    const ctx = [building ? String(building.name) : null, floor ? String(floor.name) : null].filter(Boolean).join(' › ');
+    return { label: ctx ? `${String(z.name)}  (${ctx})` : String(z.name), value: String(z.id) };
+  });
+
+  const staffOpts = staff.map((s: Row) => ({ label: String(s.name), value: String(s.id) }));
+  const dayOpts   = DAYS.map((d, i) => ({ label: d, value: String(i + 1) }));
+  const dutyOpts  = DUTY_TYPES.map((d) => ({ label: d, value: d }));
 
   const resetForm = () => {
     if (entry) {
@@ -350,37 +371,36 @@ function DutyEntrySheet({
     } else {
       setForm(EMPTY_DUTY_FORM);
     }
-    setErr('');
+    setErrs({});
   };
 
   const create = useMutation({
     mutationFn: (b: unknown) => schoolApiPost('/api/staff-duty-rosters', b),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['sm-roster'] });
-      qc.invalidateQueries({ queryKey: ['sm-setup-health'] });
-      onClose();
-      setErr('');
-    },
-    onError: (e: Error) => setErr(e.message),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['sm-roster'] }); qc.invalidateQueries({ queryKey: ['sm-setup-health'] }); onClose(); setErrs({}); },
+    onError: (e: Error) => setErrs({ _api: e.message }),
   });
 
   const update = useMutation({
     mutationFn: (b: unknown) => schoolApiPatch(`/api/staff-duty-rosters/${entry!.id}`, b),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['sm-roster'] });
-      qc.invalidateQueries({ queryKey: ['sm-setup-health'] });
-      onClose();
-      setErr('');
-    },
-    onError: (e: Error) => setErr(e.message),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['sm-roster'] }); qc.invalidateQueries({ queryKey: ['sm-setup-health'] }); onClose(); setErrs({}); },
+    onError: (e: Error) => setErrs({ _api: e.message }),
   });
 
-  const set = (k: string) => (v: string) => setForm((f) => ({ ...f, [k]: v }));
+  const set = (k: string) => (v: string) => { setErrs({}); setForm((f) => ({ ...f, [k]: v })); };
+
+  const validate = (): Record<string, string> => {
+    const e: Record<string, string> = {};
+    if (!form.staffMemberId) e.staffMemberId = 'Staff member is required';
+    if (!form.dutyType) e.dutyType = 'Duty type is required';
+    if (!form.dayOfWeek) e.dayOfWeek = 'Day is required';
+    if (!form.startTime || !form.endTime) e.startTime = 'Start and end times are required';
+    else if (form.endTime <= form.startTime) e.endTime = 'End time must be after start time';
+    return e;
+  };
 
   const save = () => {
-    if (!form.staffMemberId) return setErr('Staff member is required');
-    if (!form.startTime || !form.endTime) return setErr('Times are required');
-    if (form.endTime <= form.startTime) return setErr('End time must be after start');
+    const e = validate();
+    if (Object.keys(e).length) return setErrs(e);
     const body = {
       staffMemberId: Number(form.staffMemberId),
       zoneId: form.zoneId ? Number(form.zoneId) : undefined,
@@ -391,46 +411,45 @@ function DutyEntrySheet({
       isCriticalWindow: form.isCriticalWindow,
     };
     if (isEdit) update.mutate(body);
-    else
-      create.mutate({
-        organizationId: ORG_ID,
-        ...body,
-      });
+    else create.mutate({ organizationId: ORG_ID, ...body });
   };
 
   const pending = create.isPending || update.isPending;
 
   useEffect(() => {
     if (open) resetForm();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, entry]);
 
   return (
     <Sheet open={open} onClose={onClose}>
       <SHdr title={isEdit ? 'Edit Duty Assignment' : 'Add Duty Assignment'} onClose={onClose} />
       <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
-        {err && <p className="rounded bg-red-500/10 px-3 py-2 text-xs text-red-400">{err}</p>}
-        <FormField label="Staff member *">
+        {errs._api && <p className="rounded bg-red-500/10 px-3 py-2 text-xs text-red-400">{errs._api}</p>}
+        <FormField label="Staff member *" error={errs.staffMemberId}>
           <FSelect value={form.staffMemberId} onChange={set('staffMemberId')} options={staffOpts} />
-        </FormField>
-        <FormField label="Zone (optional)">
-          <FSelect value={form.zoneId} onChange={set('zoneId')} options={zoneOpts} />
+          {staffOpts.length === 0 && <p className="text-xs text-slate-500">No staff found — add staff in Master Data first.</p>}
         </FormField>
         <div className="grid grid-cols-2 gap-3">
-          <FormField label="Duty type">
+          <FormField label="Duty type *" error={errs.dutyType}>
             <FSelect value={form.dutyType} onChange={set('dutyType')} options={dutyOpts} />
           </FormField>
-          <FormField label="Day">
+          <FormField label="Day *" error={errs.dayOfWeek}>
             <FSelect value={form.dayOfWeek} onChange={set('dayOfWeek')} options={dayOpts} />
           </FormField>
         </div>
         <div className="grid grid-cols-2 gap-3">
-          <FormField label="Start time *">
+          <FormField label="Start time *" error={errs.startTime}>
             <FInput type="time" value={form.startTime} onChange={set('startTime')} />
           </FormField>
-          <FormField label="End time *">
+          <FormField label="End time *" error={errs.endTime}>
             <FInput type="time" value={form.endTime} onChange={set('endTime')} />
           </FormField>
         </div>
+        <FormField label="Zone (optional — Building › Floor shown for context)">
+          <FSelect value={form.zoneId} onChange={set('zoneId')} options={zoneOpts} />
+          {zoneOpts.length === 0 && <p className="text-xs text-slate-500">No zones found — add zones in Master Data first.</p>}
+        </FormField>
         <FToggle
           label="Critical window (⚡ shown as gap if unstaffed)"
           checked={form.isCriticalWindow}
@@ -438,9 +457,7 @@ function DutyEntrySheet({
         />
       </div>
       <div className="border-t border-slate-800 px-6 py-4 flex gap-2 justify-end flex-shrink-0">
-        <Button variant="outline" onClick={onClose}>
-          Cancel
-        </Button>
+        <Button variant="outline" onClick={onClose}>Cancel</Button>
         <Button onClick={save} disabled={pending}>
           {pending ? 'Saving…' : isEdit ? 'Save changes' : 'Add assignment'}
         </Button>

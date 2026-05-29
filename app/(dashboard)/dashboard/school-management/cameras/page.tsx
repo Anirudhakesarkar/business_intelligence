@@ -663,8 +663,10 @@ type ViewTab = 'table' | 'map';
 export default function CamerasMappingPage() {
   const qc = useQueryClient();
   const { data = [], isLoading } = useCameras();
-  const { data: zones = [] } = useQuery({ queryKey: ['sm-zones-all'], queryFn: () => schoolApiGet('/api/zones') });
-  const { data: rooms = [] } = useRooms();
+  const { data: zonesRaw = [] } = useZones();
+  const { data: roomsRaw = [] } = useRooms();
+  const zones: Row[] = Array.isArray(zonesRaw) ? zonesRaw : [];
+  const rooms: Row[] = Array.isArray(roomsRaw) ? roomsRaw : [];
   const [search, setSearch] = useState('');
   const [purposeFilter, setPurposeFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
@@ -852,8 +854,8 @@ export default function CamerasMappingPage() {
                     {filtered.map((c) => {
                       const id = rowNumericId(c);
                       const checked = id != null && selectedIds.has(id);
-                      const zone = (Array.isArray(zones) ? zones : []).find((z: Row) => z.id === c.zoneId) as Row | undefined;
-                      const room = (Array.isArray(rooms) ? rooms : []).find((r: Row) => r.id === c.roomId) as Row | undefined;
+                      const zone = zones.find((z) => Number(z.id) === Number(c.zoneId));
+                      const room = rooms.find((r) => Number(r.id) === Number(c.roomId));
                       return (
                         <tr key={String(c.id ?? c.cameraCode)} className={`border-t border-slate-800 hover:bg-slate-800/40 text-slate-300 transition-colors ${checked ? 'bg-blue-950/25' : ''}`}>
                           <td className="px-3 py-2">
@@ -908,7 +910,7 @@ export default function CamerasMappingPage() {
       )}
 
       {!isLoading && view === 'map' && (
-        <MappingDiagram cameras={filtered} zones={Array.isArray(zones) ? zones : []} rooms={Array.isArray(rooms) ? rooms : []} />
+        <MappingDiagram cameras={filtered} zones={zones} rooms={rooms} />
       )}
 
       <CameraFormSheet open={formOpen} onClose={() => setFormOpen(false)} editing={editing} />
