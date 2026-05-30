@@ -18,7 +18,10 @@ import {
   X,
   GraduationCap,
   Users,
+  FileDown,
+  Loader2,
 } from 'lucide-react';
+import { downloadCampusTreePdf } from '@/lib/school-management/campus-tree-export';
 
 type Row = Record<string, unknown>;
 type ViewMode = 'explorer' | 'outline';
@@ -1084,6 +1087,25 @@ export function CampusTreeView({
 }) {
   const [viewMode, setViewMode] = useState<ViewMode>('explorer');
   const [search, setSearch] = useState('');
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
+
+  const exportInput = useMemo(
+    () => ({ sites, buildings, floors, zones, rooms, classes, sections, sectionMappings }),
+    [sites, buildings, floors, zones, rooms, classes, sections, sectionMappings],
+  );
+
+  const handleExportPdf = useCallback(async () => {
+    setExportError(null);
+    setExporting(true);
+    try {
+      await downloadCampusTreePdf(exportInput);
+    } catch (e) {
+      setExportError((e as Error).message || 'Export failed');
+    } finally {
+      setExporting(false);
+    }
+  }, [exportInput]);
 
   const counts = useMemo(
     () => ({
@@ -1132,7 +1154,23 @@ export function CampusTreeView({
       />
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <ViewToggle mode={viewMode} onChange={setViewMode} />
+        <div className="flex flex-wrap items-center gap-2">
+          <ViewToggle mode={viewMode} onChange={setViewMode} />
+          <button
+            type="button"
+            onClick={() => void handleExportPdf()}
+            disabled={exporting}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-900/80 px-3 py-1.5 text-xs font-medium text-slate-200 transition-colors hover:border-slate-600 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+            title="Download campus hierarchy as PDF"
+          >
+            {exporting ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <FileDown className="h-3.5 w-3.5" />
+            )}
+            Export PDF
+          </button>
+        </div>
         <div className="relative w-full sm:max-w-xs">
           <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-500" />
           <input
@@ -1154,6 +1192,12 @@ export function CampusTreeView({
           )}
         </div>
       </div>
+
+      {exportError && (
+        <p className="text-xs text-red-400" role="alert">
+          {exportError}
+        </p>
+      )}
 
       {viewMode === 'explorer' ? (
         <CampusExplorer
